@@ -31,3 +31,8 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# --- QUAN TRỌNG: File cấu hình nhạy cảm ---
+# Không đẩy file chứa mật khẩu thực tế lên Git
+src/main/resources/application-local.properties
+.env
