@@ -1,5 +1,6 @@
 package com.pbl3.service;
 
+import com.pbl3.dto.ShowInfoRequest;
 import com.pbl3.dto.SignupRequest;
 import com.pbl3.entity.Role;
 import com.pbl3.entity.User;
@@ -54,19 +55,37 @@ public class UserService {
         return user;
     }
 
-    public User UpdateUserProfile(Long userId, String newUsername, String fullName, String bio) {
-    User user = userRepository.findById(userId)
+    public User updateCurrentUserProfile(String currentUsername, String newUsername, String fullName, String bio) {
+    // 1. Tìm User dựa trên username hiện tại đang đăng nhập
+    User user = userRepository.findByUsername(currentUsername)
             .orElseThrow(() -> new IllegalArgumentException("Người dùng không tồn tại"));
 
-    if (!user.getUsername().equals(newUsername)) {
+    // 2. Nếu họ muốn đổi sang Username mới
+    if (newUsername != null && !user.getUsername().equals(newUsername)) {
+        // Kiểm tra xem username mới có bị trùng với ai khác không
         if (userRepository.existsByUsername(newUsername)) {
-            throw new IllegalArgumentException("Tên đăng nhập này đã tồn tại, vui lòng chọn tên khác!");
+            throw new IllegalArgumentException("Tên đăng nhập mới đã tồn tại!");
         }
         user.setUsername(newUsername);
     }
 
+    // 3. Cập nhật các thông tin khác
     user.setFullName(fullName);
     user.setBio(bio);
+
     return userRepository.save(user);
+}
+    
+    public ShowInfoRequest getUserInfoByUsername(String username) {
+    // Tìm User dựa trên username (phải dùng hàm findByUsername đã tạo ở Repository)
+    User user = userRepository.findByUsername(username)
+            .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy người dùng: " + username));
+    ShowInfoRequest info = new ShowInfoRequest();
+    info.setUsername(user.getUsername());
+    info.setEmail(user.getEmail());
+    info.setFullName(user.getFullName());
+    info.setBio(user.getBio());
+
+    return info;
     }
 }

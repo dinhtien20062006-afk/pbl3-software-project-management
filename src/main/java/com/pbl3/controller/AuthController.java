@@ -1,5 +1,6 @@
 package com.pbl3.controller;
 
+import com.pbl3.dto.ShowInfoRequest;
 import com.pbl3.dto.SigninRequest;
 import com.pbl3.dto.SignupRequest;
 import com.pbl3.dto.UpdateRequest;
@@ -8,6 +9,8 @@ import com.pbl3.service.UserService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.security.Principal;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -35,20 +38,44 @@ public class AuthController {
     @PostMapping("/signin")
     public ResponseEntity<?> login(@RequestBody SigninRequest request) {
         try {
-            // Gọi phương thức SignIn bạn vừa viết
+            // Lưu ý: Đảm bảo trong UserService phương thức là SignIn (viết hoa chữ S theo code cũ của bạn)
             User user = userService.SignIn(request.getUsername(), request.getPassword());
-            
-            // Ở đây mình trả về Object User để test, thực tế sẽ trả về JWT
             return ResponseEntity.ok(user); 
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(e.getMessage());
         }
     }
-    @PutMapping("/{userId}")
-    public ResponseEntity<?> updateProfile(@PathVariable Long userId, @RequestBody UpdateRequest request) {
+
+    // 3. Cập nhật thông tin cá nhân (Sử dụng Principal để bảo mật)
+    @PutMapping("/me/update")
+    public ResponseEntity<?> updateMyProfile(Principal principal, @RequestBody UpdateRequest request) {
+        if (principal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Bạn chưa đăng nhập");
+        }
         try {
-            User updatedUser = userService.UpdateUserProfile(userId, request.getUsername(), request.getFullName(), request.getBio());
+            String currentUsername = principal.getName();
+            User updatedUser = userService.updateCurrentUserProfile(
+                currentUsername, 
+                request.getUsername(), 
+                request.getFullName(), 
+                request.getBio()
+            );
             return ResponseEntity.ok(updatedUser);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    // 4. Lấy thông tin cá nhân hiện tại
+    @GetMapping("/me")
+    public ResponseEntity<?> getCurrentUserInfo(Principal principal) {
+        if (principal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Bạn chưa đăng nhập");
+        }
+        try {
+            String currentUsername = principal.getName(); 
+            ShowInfoRequest userInfo = userService.getUserInfoByUsername(currentUsername);
+            return ResponseEntity.ok(userInfo);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
