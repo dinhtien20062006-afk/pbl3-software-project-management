@@ -52,6 +52,6 @@ public class ProjectController {
     public String delete(@PathVariable Long id) {
 
         service.delete(id);
-        return "Deleted!";
+        return "Xóa thành công!";
     }
 }

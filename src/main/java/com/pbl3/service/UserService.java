@@ -1,6 +1,6 @@
 package com.pbl3.service;
 
-import com.pbl3.dto.SignupRequest;
+import com.pbl3.dto.request.SignupRequest;
 import com.pbl3.entity.Role;
 import com.pbl3.entity.User;
 import com.pbl3.repository.UserRepository;

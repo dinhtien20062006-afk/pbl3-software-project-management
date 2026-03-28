@@ -1,8 +1,8 @@
 package com.pbl3.controller;
 
-import com.pbl3.dto.SigninRequest;
-import com.pbl3.dto.SignupRequest;
-import com.pbl3.dto.UpdateRequest;
+import com.pbl3.dto.request.SignupRequest;
+import com.pbl3.dto.request.UpdateRequest;
+import com.pbl3.dto.request.SigninRequest;
 import com.pbl3.entity.User;
 import com.pbl3.service.UserService;
 import org.springframework.http.HttpStatus;
