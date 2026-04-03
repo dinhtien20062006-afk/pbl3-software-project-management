@@ -12,11 +12,13 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@IdClass(ProjectMemberId.class)
 public class ProjectMember {
 
     @Id
     @ManyToOne
+    @GeneratedValue(strategy = GenerationType.IDENTITY) 
+    private Long id;
+    
     @JoinColumn(name = "project_id")
     private Project project;
 
