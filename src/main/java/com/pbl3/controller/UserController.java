@@ -1,7 +1,7 @@
 package com.pbl3.controller;
 
-import com.pbl3.dto.ShowInfoResponse;
-import com.pbl3.dto.UpdateRequest;
+import com.pbl3.dto.request.UpdateRequest;
+import com.pbl3.dto.response.ShowInfoResponse;
 import com.pbl3.entity.User;
 import com.pbl3.service.UserService;
 import org.springframework.http.HttpStatus;

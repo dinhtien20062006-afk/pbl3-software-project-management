@@ -1,4 +1,4 @@
-package com.pbl3.dto;
+package com.pbl3.dto.request;
 import lombok.*;
 
 @Getter
