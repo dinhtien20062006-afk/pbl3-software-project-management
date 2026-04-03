@@ -22,11 +22,11 @@ public class Project {
     // Map với cột project_name trong DB
     private String projectName;
 
-    private String description; // Mô tả dự án
+    private String description; 
 
-    private LocalDate startDate; // Ngày bắt đầu
+    private LocalDate startDate; 
 
-    private LocalDate endDate; // Ngày kết thúc
+    private LocalDate endDate; 
 
     @Enumerated(EnumType.STRING) 
     @Builder.Default

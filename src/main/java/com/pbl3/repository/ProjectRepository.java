@@ -8,5 +8,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface ProjectRepository extends JpaRepository<Project, Long> {
 
     // Không cần viết thêm vẫn dùng được:
-    // save(), findAll(), findById(), deleteById()
+    // Kế thừa các hàm: save(), findAll(), findById(), deleteById()
 }
