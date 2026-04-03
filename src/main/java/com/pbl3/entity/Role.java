@@ -1,7 +1,7 @@
 package com.pbl3.entity;
 
 public enum Role {
-    USER,
+    MEMBER,
     ADMIN,
     PROJECT_MANAGER
 }

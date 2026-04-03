@@ -1,72 +1,58 @@
 package com.pbl3.service;
 
-import com.pbl3.dto.request.SignupRequest;
-import com.pbl3.entity.Role;
+import com.pbl3.dto.response.ShowInfoResponse;
 import com.pbl3.entity.User;
 import com.pbl3.repository.UserRepository;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 @Service
 public class UserService {
 
     private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
-    
 
-    public UserService(UserRepository userRepository,
-                       PasswordEncoder passwordEncoder) {
+    public UserService(UserRepository userRepository) {
         this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
+    }
+    public class AppException extends RuntimeException {
+    // Bạn có thể thêm errorCode tại đây nếu muốn
+    public AppException(String message) {
+        super(message);
+    }
     }
 
-    public User registerUser(SignupRequest request) {
 
-        if (userRepository.existsByUsername(request.getUsername())) {
-            throw new IllegalArgumentException("Tên đăng nhập đã tồn tại");
+    public User updateCurrentUserProfile(String currentUsername, String newUsername, String fullName, String bio) {
+        // Tìm User dựa trên username hiện tại
+        User user = userRepository.findByUsername(currentUsername)
+                .orElseThrow(() -> new AppException("Người dùng không tồn tại"));
+
+        // Nếu người dùng muốn đổi sang Username mới
+        if (newUsername != null && !user.getUsername().equals(newUsername)) {
+            // Kiểm tra xem username mới có bị trùng với ai khác không
+            if (userRepository.existsByUsername(newUsername)) {
+                throw new AppException("Tên đăng nhập mới đã tồn tại!");
+            }
+            user.setUsername(newUsername);
         }
 
-        if (userRepository.existsByEmail(request.getEmail())) {
-            throw new IllegalArgumentException("Email đã được sử dụng");
-        }
-
-        User user = new User();
-
-        user.setUsername(request.getUsername());
-        user.setEmail(request.getEmail());
-        user.setRole(Role.USER); // default role
-
-        // BCrypt hash
-        user.setPassword(
-                passwordEncoder.encode(request.getPassword())
-        );
+        // Cập nhật các thông tin khác
+        user.setFullName(fullName);
+        user.setBio(bio);
 
         return userRepository.save(user);
     }
 
-    public User SignIn(String username, String password) {
+    // 2. Lấy thông tin hiển thị dựa trên Username
+    public ShowInfoResponse getUserInfoByUsername(String username) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new IllegalArgumentException("Tài khoản hoặc mật khẩu không đúng"));
+                .orElseThrow(() -> new AppException("Không tìm thấy người dùng: " + username));
 
-        if (!passwordEncoder.matches(password, user.getPassword())) {
-            throw new IllegalArgumentException("Tài khoản hoặc mật khẩu không đúng");
-        }
-        return user;
-    }
+        ShowInfoResponse info = new ShowInfoResponse();
+        info.setUsername(user.getUsername());
+        info.setEmail(user.getEmail());
+        info.setFullName(user.getFullName());
+        info.setBio(user.getBio());
 
-    public User UpdateUserProfile(Long userId, String newUsername, String fullName, String bio) {
-    User user = userRepository.findById(userId)
-            .orElseThrow(() -> new IllegalArgumentException("Người dùng không tồn tại"));
-
-    if (!user.getUsername().equals(newUsername)) {
-        if (userRepository.existsByUsername(newUsername)) {
-            throw new IllegalArgumentException("Tên đăng nhập này đã tồn tại, vui lòng chọn tên khác!");
-        }
-        user.setUsername(newUsername);
-    }
-
-    user.setFullName(fullName);
-    user.setBio(bio);
-    return userRepository.save(user);
+        return info;
     }
 }

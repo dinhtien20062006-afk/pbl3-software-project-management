@@ -1,10 +1,9 @@
 package com.pbl3.controller;
 
-import com.pbl3.dto.request.SignupRequest;
-import com.pbl3.dto.request.UpdateRequest;
 import com.pbl3.dto.request.SigninRequest;
+import com.pbl3.dto.request.SignupRequest;
 import com.pbl3.entity.User;
-import com.pbl3.service.UserService;
+import com.pbl3.service.AuthService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -14,43 +13,29 @@ import org.springframework.web.bind.annotation.*;
 @CrossOrigin(origins = "*")
 public class AuthController {
 
-    private final UserService userService;
+    private final AuthService authService;
 
-    public AuthController(UserService userService) {
-        this.userService = userService;
+    public AuthController(AuthService authService) {
+        this.authService = authService;
     }
 
-    // 1. Endpoint Đăng ký
     @PostMapping("/signup")
     public ResponseEntity<?> register(@RequestBody SignupRequest request) {
         try {
-            User registeredUser = userService.registerUser(request);
+            User registeredUser = authService.registerUser(request);
             return new ResponseEntity<>(registeredUser, HttpStatus.CREATED);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
 
-    // 2. Endpoint Đăng nhập
     @PostMapping("/signin")
     public ResponseEntity<?> login(@RequestBody SigninRequest request) {
         try {
-            // Gọi phương thức SignIn bạn vừa viết
-            User user = userService.SignIn(request.getUsername(), request.getPassword());
-            
-            // Ở đây mình trả về Object User để test, thực tế sẽ trả về JWT
+            User user = authService.SignIn(request.getUsername(), request.getPassword());
             return ResponseEntity.ok(user); 
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(e.getMessage());
-        }
-    }
-    @PutMapping("/{userId}")
-    public ResponseEntity<?> updateProfile(@PathVariable Long userId, @RequestBody UpdateRequest request) {
-        try {
-            User updatedUser = userService.UpdateUserProfile(userId, request.getUsername(), request.getFullName(), request.getBio());
-            return ResponseEntity.ok(updatedUser);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
 }
