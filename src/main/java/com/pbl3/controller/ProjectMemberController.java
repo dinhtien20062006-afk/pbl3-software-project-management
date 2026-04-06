@@ -9,29 +9,35 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/project-members")
+@RequestMapping("/projects/{projectId}/members")
 @RequiredArgsConstructor
 public class ProjectMemberController {
 
-    private final ProjectMemberService service;
+    private final ProjectMemberService projectMemberService;
 
-    // Thêm thành viên vào dự án
-    @PostMapping
-    public ProjectMemberResponse addMember(@RequestBody ProjectMemberRequest request) {
-        return service.addMember(request);
-    }
-
-    // Lấy danh sách thành viên theo projectId
-    @GetMapping("/{projectId}")
+    // GET list
+    @GetMapping
     public List<ProjectMemberResponse> getMembers(@PathVariable Long projectId) {
-        return service.getMembers(projectId);
+        return projectMemberService.getMembers(projectId);
     }
 
-    // Xóa thành viên khỏi dự án
-    @DeleteMapping
-    public String removeMember(@RequestParam Long projectId,
-                               @RequestParam Long userId) {
-        service.removeMember(projectId, userId);
-        return "Xóa thành viên khỏi dự án thành công";
+    // ADD
+    @PostMapping
+    public String addMember(
+            @PathVariable Long projectId,
+            @RequestBody ProjectMemberRequest request) {
+
+        projectMemberService.addMember(projectId, request);
+        return "Thêm thành viên thành công";
+    }
+
+    // DELETE
+    @DeleteMapping("/{userId}")
+    public String removeMember(
+            @PathVariable Long projectId,
+            @PathVariable Long userId) {
+
+        projectMemberService.removeMember(projectId, userId);
+        return "Xóa thành viên thành công";
     }
 }

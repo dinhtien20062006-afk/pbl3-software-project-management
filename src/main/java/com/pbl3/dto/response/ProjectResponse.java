@@ -1,6 +1,6 @@
 package com.pbl3.dto.response;
 
-import lombok.Builder;
+import lombok.AllArgsConstructor;
 import lombok.Data;
 
 import java.time.LocalDate;
@@ -8,7 +8,7 @@ import java.time.LocalDate;
 import com.pbl3.entity.ProjectStatus;
 
 @Data
-@Builder // Cho phép build object
+@AllArgsConstructor
 public class ProjectResponse {
 
     // Dữ liệu trả về client

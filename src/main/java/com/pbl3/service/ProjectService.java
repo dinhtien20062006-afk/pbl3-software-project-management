@@ -1,113 +1,119 @@
 package com.pbl3.service;
 
-import com.pbl3.dto.request.ProjectRequest;
+import com.pbl3.dto.request.CreateProjectRequest;
+import com.pbl3.dto.request.UpdateProjectRequest;
 import com.pbl3.dto.response.ProjectResponse;
 import com.pbl3.entity.Project;
+import com.pbl3.entity.ProjectStatus;
 import com.pbl3.repository.ProjectRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
-@Service // Xử lý logic
+@Service
+@RequiredArgsConstructor
 public class ProjectService {
 
-    private final ProjectRepository repo;
+    private final ProjectRepository projectRepository;
 
-    // Constructor injection
-    public ProjectService(ProjectRepository repo) {
-        this.repo = repo;
+    // CREATE
+    public ProjectResponse createProject(CreateProjectRequest request) {
+
+        if (request.getEndDate().isBefore(request.getStartDate())) {
+            throw new RuntimeException("Ngày kết thúc phải sau ngày bắt đầu");
+        }
+
+        Project project = new Project();
+        project.setProjectName(request.getProjectName());
+        project.setDescription(request.getDescription());
+        project.setStartDate(request.getStartDate());
+        project.setEndDate(request.getEndDate());
+        project.setStatus(ProjectStatus.PLANNING);
+
+        projectRepository.save(project);
+
+        System.out.println("Tạo project thành công");
+
+        return mapToResponse(project);
     }
 
-    // ===== CREATE =====
-    public ProjectResponse create(ProjectRequest dto) {
+    // UPDATE
+    public ProjectResponse updateProject(Long id, UpdateProjectRequest request) {
 
-        // Convert DTO → Entity
-        Project p = Project.builder()
-                .projectName(dto.getProjectName())
-                .description(dto.getDescription())
-                .startDate(dto.getStartDate())
-                .endDate(dto.getEndDate())
-                .build();
+        Project project = projectRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy project"));
 
-        // Validate ngày
-        if (p.getStartDate() != null && p.getEndDate() != null) {
-            if (p.getEndDate().isBefore(p.getStartDate())) {
-                throw new RuntimeException("Ngày không hợp lệ");
+        if (request.getProjectName() != null) {
+            project.setProjectName(request.getProjectName());
+        }
+
+        if (request.getDescription() != null) {
+            project.setDescription(request.getDescription());
+        }
+
+        if (request.getStartDate() != null) {
+            project.setStartDate(request.getStartDate());
+        }
+
+        if (request.getEndDate() != null) {
+            project.setEndDate(request.getEndDate());
+        }
+
+        if (request.getStatus() != null) {
+            project.setStatus(request.getStatus());
+        }
+
+        if (project.getStartDate() != null && project.getEndDate() != null) {
+            if (project.getEndDate().isBefore(project.getStartDate())) {
+                throw new RuntimeException("Ngày kết thúc không hợp lệ");
             }
         }
 
-        Project saved = repo.save(p);
+        projectRepository.save(project);
 
-        // Convert Entity → Response
-        return ProjectResponse.builder()
-                .id(saved.getId())
-                .projectName(saved.getProjectName())
-                .description(saved.getDescription())
-                .startDate(saved.getStartDate())
-                .endDate(saved.getEndDate())
-                .status(saved.getStatus())
-                .build();
+        System.out.println("Cập nhật project thành công");
+
+        return mapToResponse(project);
     }
 
-    // ===== GET ALL =====
-    public List<ProjectResponse> getAll() {
-
-        return repo.findAll()
-                .stream() // duyệt list
-                .map(p -> ProjectResponse.builder()
-                        .id(p.getId())
-                        .projectName(p.getProjectName())
-                        .description(p.getDescription())
-                        .startDate(p.getStartDate())
-                        .endDate(p.getEndDate())
-                        .status(p.getStatus())
-                        .build())
-                .collect(Collectors.toList());
+    // GET ALL
+    public List<ProjectResponse> getAllProjects() {
+        return projectRepository.findAll()
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
     }
 
-    // ===== GET BY ID =====
-    public ProjectResponse getById(Long id) {
+    // GET BY ID
+    public ProjectResponse getProjectById(Long id) {
 
-        Project p = repo.findById(id)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy"));
+        Project project = projectRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy project"));
 
-        return ProjectResponse.builder()
-                .id(p.getId())
-                .projectName(p.getProjectName())
-                .description(p.getDescription())
-                .startDate(p.getStartDate())
-                .endDate(p.getEndDate())
-                .status(p.getStatus())
-                .build();
+        return mapToResponse(project);
     }
 
-    // ===== UPDATE =====
-    public ProjectResponse update(Long id, ProjectRequest dto) {
+    // DELETE
+    public void deleteProject(Long id) {
 
-        Project p = repo.findById(id)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy"));
+        Project project = projectRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy project"));
 
-        // Update dữ liệu
-        p.setProjectName(dto.getProjectName());
-        p.setDescription(dto.getDescription());
-        p.setStartDate(dto.getStartDate());
-        p.setEndDate(dto.getEndDate());
+        projectRepository.delete(project);
 
-        Project saved = repo.save(p);
-
-        return ProjectResponse.builder()
-                .id(saved.getId())
-                .projectName(saved.getProjectName())
-                .description(saved.getDescription())
-                .startDate(saved.getStartDate())
-                .endDate(saved.getEndDate())
-                .status(saved.getStatus())
-                .build();
+        System.out.println("Xóa project thành công");
     }
 
-    // ===== DELETE =====
-    public void delete(Long id) {
-        repo.deleteById(id);
+    // MAP DTO
+    private ProjectResponse mapToResponse(Project project) {
+
+    return new ProjectResponse(
+            project.getId(),
+            project.getProjectName(),
+            project.getDescription(),
+            project.getStartDate(),
+            project.getEndDate(),
+            project.getStatus());
     }
 }

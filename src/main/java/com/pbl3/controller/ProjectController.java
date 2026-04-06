@@ -1,57 +1,55 @@
 package com.pbl3.controller;
 
-import com.pbl3.dto.request.ProjectRequest;
+import com.pbl3.dto.request.CreateProjectRequest;
+import com.pbl3.dto.request.UpdateProjectRequest;
 import com.pbl3.dto.response.ProjectResponse;
 import com.pbl3.service.ProjectService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@RestController // API trả JSON
-@RequestMapping("/api/projects") // Base URL
+@RestController
+@RequestMapping("/projects")
+@RequiredArgsConstructor
 public class ProjectController {
 
-    private final ProjectService service;
+    private final ProjectService projectService;
 
-    public ProjectController(ProjectService service) {
-        this.service = service;
-    }
-
-    // ===== CREATE =====
+    // CREATE
     @PostMapping
-    public ProjectResponse create(@RequestBody ProjectRequest dto) {
+    public ProjectResponse create(
+            @RequestBody CreateProjectRequest request,
+            @RequestParam Long managerId) {
 
-        // Nhận JSON → chuyển thành DTO
-        return service.create(dto);
+        return projectService.createProject(request);
     }
 
-    // ===== GET ALL =====
+    // UPDATE
+    @PutMapping("/{id}")
+    public ProjectResponse update(
+            @PathVariable Long id,
+            @RequestBody UpdateProjectRequest request) {
+
+        return projectService.updateProject(id, request);
+    }
+
+    // GET ALL
     @GetMapping
     public List<ProjectResponse> getAll() {
-        return service.getAll();
+        return projectService.getAllProjects();
     }
 
-    // ===== GET BY ID =====
+    // GET BY ID
     @GetMapping("/{id}")
     public ProjectResponse getById(@PathVariable Long id) {
-
-        // Lấy id từ URL
-        return service.getById(id);
+        return projectService.getProjectById(id);
     }
 
-    // ===== UPDATE =====
-    @PutMapping("/{id}")
-    public ProjectResponse update(@PathVariable Long id,
-                                 @RequestBody ProjectRequest dto) {
-
-        return service.update(id, dto);
-    }
-
-    // ===== DELETE =====
+    // DELETE
     @DeleteMapping("/{id}")
     public String delete(@PathVariable Long id) {
-
-        service.delete(id);
-        return "Xóa thành công!";
+        projectService.deleteProject(id);
+        return "Xóa project thành công";
     }
 }

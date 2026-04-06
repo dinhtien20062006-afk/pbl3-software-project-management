@@ -13,60 +13,66 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class ProjectMemberService {
 
-    private final ProjectMemberRepository repo;
-    private final ProjectRepository projectRepo;
-    private final UserRepository userRepo;
+    private final ProjectRepository projectRepository;
+    private final UserRepository userRepository;
+    private final ProjectMemberRepository projectMemberRepository;
 
-    public ProjectMemberResponse addMember(ProjectMemberRequest req) {
+    // 📌 Lấy danh sách member
+    public List<ProjectMemberResponse> getMembers(Long projectId) {
 
-        if (repo.existsByProject_IdAndUser_Id(req.getProjectId(), req.getUserId())) {
-            throw new RuntimeException("Người dùng đã tồn tại trong dự án");
-        }
+        projectRepository.findById(projectId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy project"));
 
-        Project project = projectRepo.findById(req.getProjectId())
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy dự án"));
+        return projectMemberRepository.findByProject_Id(projectId)
+        .stream()
+        .map(pm -> ProjectMemberResponse.builder()
+                .userId(pm.getUser().getId())
+                .name(pm.getUser().getFullName() + " (" + pm.getUser().getUsername() + ")")
+                .role(pm.getProjectRole())
+                .build()
+        )
+        .toList();
+    }
 
-        User user = userRepo.findById(req.getUserId())
+    // 📌 Thêm member
+    public void addMember(Long projectId, ProjectMemberRequest request) {
+
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy project"));
+
+        User user = userRepository.findById(request.getUserId())
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
+
+        if (projectMemberRepository.existsByProject_IdAndUser_Id(projectId, request.getUserId())) {
+            throw new RuntimeException("Thành viên đã tồn tại trong project");
+        }
 
         ProjectMember pm = ProjectMember.builder()
                 .project(project)
                 .user(user)
-                .projectRole(req.getProjectRole())
+                .projectRole(request.getRole()) // chú ý field mới
                 .joinedAt(LocalDateTime.now())
                 .build();
 
-        repo.save(pm);
+        projectMemberRepository.save(pm);
 
-        return mapToResponse(pm);
+        System.out.println("Thêm thành viên thành công");
     }
 
-    public List<ProjectMemberResponse> getMembers(Long projectId) {
-        return repo.findByProject_Id(projectId)
-                .stream()
-                .map(this::mapToResponse)
-                .collect(Collectors.toList());
-    }
-
+    // 📌 Xóa member
     public void removeMember(Long projectId, Long userId) {
-        repo.deleteByProject_IdAndUser_Id(projectId, userId);
-    }
 
-    // Mapping: Chuyển dữ liệu từ Entity -> DTO
-    private ProjectMemberResponse mapToResponse(ProjectMember pm) {
-        return ProjectMemberResponse.builder()
-                .projectId(pm.getProject().getId())
-                .userId(pm.getUser().getId())
-                .projectName(pm.getProject().getProjectName())
-                .username(pm.getUser().getUsername())
-                .projectRole(pm.getProjectRole())
-                .joinedAt(pm.getJoinedAt())
-                .build();
+        if (!projectMemberRepository.existsByProject_IdAndUser_Id(projectId, userId)) {
+            throw new RuntimeException("Thành viên không tồn tại trong project");
+        }
+
+        projectMemberRepository.deleteByProject_IdAndUser_Id(projectId, userId);
+
+        System.out.println("Xóa thành viên thành công");
     }
 }
