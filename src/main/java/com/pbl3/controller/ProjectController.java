@@ -18,9 +18,7 @@ public class ProjectController {
 
     // CREATE
     @PostMapping
-    public ProjectResponse create(
-            @RequestBody CreateProjectRequest request,
-            @RequestParam Long managerId) {
+    public ProjectResponse create( @RequestBody CreateProjectRequest request) {
 
         return projectService.createProject(request);
     }

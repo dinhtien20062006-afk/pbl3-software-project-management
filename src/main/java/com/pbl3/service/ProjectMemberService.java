@@ -22,7 +22,7 @@ public class ProjectMemberService {
     private final UserRepository userRepository;
     private final ProjectMemberRepository projectMemberRepository;
 
-    // 📌 Lấy danh sách member
+    // Lấy danh sách member
     public List<ProjectMemberResponse> getMembers(Long projectId) {
 
         projectRepository.findById(projectId)
@@ -39,7 +39,7 @@ public class ProjectMemberService {
         .toList();
     }
 
-    // 📌 Thêm member
+    // Thêm member
     public void addMember(Long projectId, ProjectMemberRequest request) {
 
         Project project = projectRepository.findById(projectId)
@@ -64,7 +64,7 @@ public class ProjectMemberService {
         System.out.println("Thêm thành viên thành công");
     }
 
-    // 📌 Xóa member
+    // Xóa member
     public void removeMember(Long projectId, Long userId) {
 
         if (!projectMemberRepository.existsByProject_IdAndUser_Id(projectId, userId)) {
