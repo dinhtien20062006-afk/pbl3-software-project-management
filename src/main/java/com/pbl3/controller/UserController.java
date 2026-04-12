@@ -39,7 +39,7 @@ public class UserController {
         
         try {
             User updatedUser = userService.updateCurrentUserProfile(
-                principal.getName(), request.getUsername(), request.getFullName(), request.getBio()
+                principal.getName(), request.getUsername(), request.getFullName(), request.getBio(), request.getLocation(), request.getAvatarUrl()
             );
             return ResponseEntity.ok(updatedUser);
         } catch (Exception e) {

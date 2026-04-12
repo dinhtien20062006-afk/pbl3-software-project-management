@@ -1,6 +1,7 @@
 package com.pbl3.controller;
 
 import com.pbl3.dto.request.TaskCreateRequest;
+import com.pbl3.dto.request.TaskUpdateRequest;
 import com.pbl3.dto.response.ShowTaskResponse;
 import com.pbl3.entity.Task;
 import com.pbl3.service.TaskService;
@@ -36,10 +37,11 @@ public class TaskController {
     // 3. Cập nhật Task theo ID
     // Endpoint: PUT http://localhost:8080/api/tasks/{taskId}
     @PutMapping("/{taskId}")
-    public ResponseEntity<Task> updateTask(
+    public ResponseEntity<ShowTaskResponse> updateTask(
             @PathVariable Long taskId, 
-            @RequestBody TaskCreateRequest request) {
-        Task updatedTask = taskService.updateTask(taskId, request);
+            @RequestBody TaskUpdateRequest request) { // Đổi từ TaskCreateRequest sang TaskUpdateRequest
+        
+        ShowTaskResponse updatedTask = taskService.updateTask(taskId, request);
         return ResponseEntity.ok(updatedTask);
     }
 

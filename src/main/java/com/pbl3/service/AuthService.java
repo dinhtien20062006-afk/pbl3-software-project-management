@@ -4,8 +4,13 @@ import com.pbl3.dto.request.SignupRequest;
 import com.pbl3.entity.Role;
 import com.pbl3.entity.User;
 import com.pbl3.repository.UserRepository;
+
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+
+import com.pbl3.exception.AppException;
+import com.pbl3.exception.ErrorCode;
 
 @Service
 public class AuthService {
@@ -13,12 +18,6 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     
-    public class AppException extends RuntimeException {
-    // Bạn có thể thêm errorCode tại đây nếu muốn
-    public AppException(String message) {
-        super(message);
-    }
-}
     public AuthService(UserRepository userRepository,
                        PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
@@ -28,11 +27,11 @@ public class AuthService {
     public User registerUser(SignupRequest request) {
 
         if (userRepository.existsByUsername(request.getUsername())) {
-        throw new AppException("Tên đăng nhập đã tồn tại");
+        throw new AppException(ErrorCode.USER_EXISTED);
         }
 
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new AppException("Email đã được sử dụng");
+            throw new AppException(ErrorCode.USER_EXISTED);
         }
 
         User user = new User();
@@ -51,11 +50,20 @@ public class AuthService {
 
     public User SignIn(String username, String password) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new AppException("Tài khoản hoặc mật khẩu không đúng"));
+                .orElse(null);
 
-        if (!passwordEncoder.matches(password, user.getPassword())) {
-            throw new AppException("Tài khoản hoặc mật khẩu không đúng");
+        if (user != null && !user.getStatus().canLogin()) {
+        throw new DisabledException("Tài khoản đang bị khóa hoặc không khả dụng. Trạng thái hiện tại: " + user.getStatus());
         }
-        return user;
+        
+        User user1 = userRepository.findByEmail(username)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+
+        User authenticatedUser = user != null ? user : user1;
+
+        if (!passwordEncoder.matches(password, authenticatedUser.getPassword())) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
+        return authenticatedUser;
     }
 }

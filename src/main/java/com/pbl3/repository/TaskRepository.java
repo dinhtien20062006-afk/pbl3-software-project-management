@@ -3,6 +3,8 @@ package com.pbl3.repository;
 import com.pbl3.entity.Task;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
+
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
@@ -16,4 +18,5 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
 
     // Tìm các task có độ ưu tiên cao
     List<Task> findByPriority(com.pbl3.entity.TaskPriority priority);
+    List<Task> findAllByDeadlineBetween(LocalDateTime start, LocalDateTime end);
 }

@@ -8,4 +8,6 @@ public class UpdateRequest {
     private String email;
     private String bio;
     private String fullName;
+    private String Location;
+    private String avatarUrl;
 }

@@ -32,4 +32,7 @@ public class Project {
     @Builder.Default
     private ProjectStatus status = ProjectStatus.PLANNING; 
     // Trạng thái mặc định
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "manager_id") // Khớp với tên cột trong file SQL của bạn
+    private User manager;
 }
