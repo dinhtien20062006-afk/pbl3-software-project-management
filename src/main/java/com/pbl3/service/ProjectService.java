@@ -105,6 +105,11 @@ public class ProjectService {
         System.out.println("Xóa project thành công");
     }
 
+    // Like Search 
+    public List<Project> searchProjectByName(String name) {
+        return projectRepository.findByProjectNameContainingIgnoreCase(name);
+    }
+
     // MAP DTO
     private ProjectResponse mapToResponse(Project project) {
 
