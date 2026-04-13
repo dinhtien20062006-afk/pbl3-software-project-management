@@ -5,7 +5,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 
-
 import jakarta.persistence.Column;
 import lombok.*;
 
@@ -39,5 +38,13 @@ public class User {
     @Column(nullable = true)
     private String bio;
 
+    @Column(nullable = true)
+    private String Location;
+
+    @Column(nullable = true)
+    private String avatarUrl;
+
+    @Column(nullable = false)
+    private UserStatus status;
 
 }

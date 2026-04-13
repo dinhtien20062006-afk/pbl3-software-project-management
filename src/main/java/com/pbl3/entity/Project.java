@@ -29,4 +29,8 @@ public class Project {
     private LocalDate endDate; 
 
     private ProjectStatus status; 
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "manager_id") // Khớp với tên cột trong file SQL của bạn
+    private User manager;
 }

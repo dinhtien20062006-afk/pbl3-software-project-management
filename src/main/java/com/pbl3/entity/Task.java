@@ -19,11 +19,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "tasks")
-@Getter 
-@Setter 
-@NoArgsConstructor 
-@AllArgsConstructor 
-@Builder
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class Task {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -51,6 +47,10 @@ public class Task {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by")
     private User creator;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assignee_id") 
+    private User assignee;
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
