@@ -3,7 +3,9 @@ package com.pbl3.controller;
 import com.pbl3.dto.request.ProjectMemberRequest;
 import com.pbl3.dto.response.ProjectMemberResponse;
 import com.pbl3.service.ProjectMemberService;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -15,13 +17,13 @@ public class ProjectMemberController {
 
     private final ProjectMemberService projectMemberService;
 
-    // GET list
+    // ================= GET LIST =================
     @GetMapping
     public List<ProjectMemberResponse> getMembers(@PathVariable Long projectId) {
         return projectMemberService.getMembers(projectId);
     }
 
-    // ADD
+    // ================= ADD MEMBER =================
     @PostMapping
     public String addMember(
             @PathVariable Long projectId,
@@ -31,7 +33,7 @@ public class ProjectMemberController {
         return "Thêm thành viên thành công";
     }
 
-    // DELETE
+    // ================= REMOVE MEMBER (PM xóa) =================
     @DeleteMapping("/{userId}")
     public String removeMember(
             @PathVariable Long projectId,
@@ -39,5 +41,13 @@ public class ProjectMemberController {
 
         projectMemberService.removeMember(projectId, userId);
         return "Xóa thành viên thành công";
+    }
+
+    // ================= MEMBER TỰ RỜI =================
+    @PostMapping("/leave")
+    public String leaveProject(@PathVariable Long projectId) {
+
+        projectMemberService.leaveProject(projectId);
+        return "Bạn đã rời khỏi project";
     }
 }

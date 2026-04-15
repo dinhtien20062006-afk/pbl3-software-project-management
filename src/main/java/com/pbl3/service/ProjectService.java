@@ -9,6 +9,8 @@ import com.pbl3.entity.User;
 import com.pbl3.entity.Role;
 import com.pbl3.repository.ProjectRepository;
 import com.pbl3.repository.UserRepository;
+import com.pbl3.exception.AppException;
+import com.pbl3.exception.ErrorCode;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -23,14 +25,14 @@ public class ProjectService {
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
 
-    //  Lấy user hiện tại
+    // 🔥 Lấy user hiện tại
     private User getCurrentUser() {
         String username = SecurityContextHolder.getContext()
                 .getAuthentication()
                 .getName();
 
         return userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy user"));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
     }
 
     // ================= CREATE =================
@@ -38,13 +40,13 @@ public class ProjectService {
 
         User currentUser = getCurrentUser();
 
-        //  Chỉ PM mới được tạo
+        // 🔥 chỉ PM được tạo
         if (currentUser.getRole() != Role.PROJECT_MANAGER) {
-            throw new RuntimeException("Chỉ Project Manager mới được tạo project");
+            throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
         if (request.getEndDate().isBefore(request.getStartDate())) {
-            throw new RuntimeException("Ngày kết thúc phải sau ngày bắt đầu");
+            throw new AppException(ErrorCode.INVALID_KEY);
         }
 
         Project project = new Project();
@@ -54,12 +56,10 @@ public class ProjectService {
         project.setEndDate(request.getEndDate());
         project.setStatus(ProjectStatus.PLANNING);
 
-        //  SET MANAGER
+        // 🔥 set manager
         project.setManager(currentUser);
 
         projectRepository.save(project);
-
-        System.out.println("Tạo project thành công");
 
         return mapToResponse(project);
     }
@@ -70,11 +70,11 @@ public class ProjectService {
         User currentUser = getCurrentUser();
 
         Project project = projectRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy project"));
+                .orElseThrow(() -> new AppException(ErrorCode.PROJECT_NOT_EXISTED));
 
-        //  Chỉ manager mới được update
+        // 🔥 chỉ manager mới update
         if (!project.getManager().getId().equals(currentUser.getId())) {
-            throw new RuntimeException("Bạn không có quyền update project này");
+            throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
         if (request.getProjectName() != null) {
@@ -99,13 +99,11 @@ public class ProjectService {
 
         if (project.getStartDate() != null && project.getEndDate() != null) {
             if (project.getEndDate().isBefore(project.getStartDate())) {
-                throw new RuntimeException("Ngày kết thúc không hợp lệ");
+                throw new AppException(ErrorCode.INVALID_KEY);
             }
         }
 
         projectRepository.save(project);
-
-        System.out.println("Cập nhật project thành công");
 
         return mapToResponse(project);
     }
@@ -116,16 +114,14 @@ public class ProjectService {
         User currentUser = getCurrentUser();
 
         Project project = projectRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy project"));
+                .orElseThrow(() -> new AppException(ErrorCode.PROJECT_NOT_EXISTED));
 
-        //  Chỉ manager mới được xóa
+        // 🔥 chỉ manager mới xóa
         if (!project.getManager().getId().equals(currentUser.getId())) {
-            throw new RuntimeException("Bạn không có quyền xóa project này");
+            throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
         projectRepository.delete(project);
-
-        System.out.println("Xóa project thành công");
     }
 
     // ================= GET ALL =================
@@ -140,26 +136,24 @@ public class ProjectService {
     public ProjectResponse getProjectById(Long id) {
 
         Project project = projectRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy project"));
+                .orElseThrow(() -> new AppException(ErrorCode.PROJECT_NOT_EXISTED));
 
         return mapToResponse(project);
     }
 
-    // ================= SEARCH =================
     public List<Project> searchProjectByName(String name) {
         return projectRepository.findByProjectNameContainingIgnoreCase(name);
     }
-
-    // ================= MAP DTO =================
+    
+    // ================= MAP =================
     private ProjectResponse mapToResponse(Project project) {
-
-        return new ProjectResponse(
-                project.getId(),
-                project.getProjectName(),
-                project.getDescription(),
-                project.getStartDate(),
-                project.getEndDate(),
-                project.getStatus()
-        );
+        return ProjectResponse.builder()
+                .id(project.getId())
+                .projectName(project.getProjectName())
+                .description(project.getDescription())
+                .startDate(project.getStartDate())
+                .endDate(project.getEndDate())
+                .status(project.getStatus())
+                .build();
     }
 }

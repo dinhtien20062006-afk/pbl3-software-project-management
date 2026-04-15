@@ -13,3 +13,4 @@ public class ShowInfoResponse {
     public String avatarUrl;
     public UserStatus status;
 }
+

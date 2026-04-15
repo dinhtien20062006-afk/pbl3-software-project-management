@@ -2,6 +2,9 @@ package com.pbl3.service;
 
 import com.pbl3.dto.request.ProjectMemberRequest;
 import com.pbl3.dto.response.ProjectMemberResponse;
+import com.pbl3.entity.NotificationType;
+import com.pbl3.entity.Notification; 
+import com.pbl3.repository.NotificationRepository;
 import com.pbl3.entity.Project;
 import com.pbl3.entity.ProjectMember;
 import com.pbl3.entity.User;
@@ -16,8 +19,6 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import javax.management.Notification;
-
 @Service
 @RequiredArgsConstructor
 public class ProjectMemberService {
@@ -25,6 +26,7 @@ public class ProjectMemberService {
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
     private final ProjectMemberRepository projectMemberRepository;
+    private final NotificationRepository notificationRepository;
 
     // Lấy danh sách member
     public List<ProjectMemberResponse> getMembers(Long projectId) {
@@ -119,14 +121,12 @@ public class ProjectMemberService {
 
         for (ProjectMember m : members) {
 
-            if (m.getLeftAt() == null) { // chỉ gửi cho người còn trong team
-
+            if (m.getLeftAt() == null) { 
                 Notification noti = new Notification();
                 noti.setUser(m.getUser());
                 noti.setTitle("Thành viên rời project");
                 noti.setContent(user.getUsername() + " đã rời khỏi project " + project.getProjectName());
-                noti.setType("SYSTEM");
-
+                noti.setType(NotificationType.SYSTEM); 
                 notificationRepository.save(noti);
             }
         }

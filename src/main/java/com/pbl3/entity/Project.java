@@ -11,7 +11,7 @@ import java.time.LocalDate;
 @Setter 
 @NoArgsConstructor 
 @AllArgsConstructor 
-@Builder // Tạo object kiểu builder
+@Builder 
 public class Project {
 
     @Id 

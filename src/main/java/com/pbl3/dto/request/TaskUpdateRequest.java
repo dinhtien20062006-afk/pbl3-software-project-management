@@ -12,6 +12,7 @@ public class TaskUpdateRequest {
     private String description;
     private String priority;
     private String status;
-    private LocalDateTime startDate; // Thêm cho khớp SQL
+    private LocalDateTime startDate;
     private LocalDateTime deadline;                             
 }
+
