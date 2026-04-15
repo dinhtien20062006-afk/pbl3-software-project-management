@@ -33,4 +33,7 @@ public class ProjectMember {
 
     @Column(name = "joined_at")
     private LocalDateTime joinedAt;
+
+    @Column(name = "left_at")
+    private LocalDateTime leftAt;
 }

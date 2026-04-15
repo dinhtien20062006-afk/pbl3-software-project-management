@@ -9,10 +9,14 @@ import com.pbl3.repository.ProjectMemberRepository;
 import com.pbl3.repository.ProjectRepository;
 import com.pbl3.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+
+import javax.management.Notification;
 
 @Service
 @RequiredArgsConstructor
@@ -67,12 +71,64 @@ public class ProjectMemberService {
     // Xóa member
     public void removeMember(Long projectId, Long userId) {
 
-        if (!projectMemberRepository.existsByProject_IdAndUser_Id(projectId, userId)) {
-            throw new RuntimeException("Thành viên không tồn tại trong project");
+        ProjectMember pm = projectMemberRepository
+                .findByProject_IdAndUser_Id(projectId, userId)
+                .orElseThrow(() -> new RuntimeException("Thành viên không tồn tại"));
+
+        pm.setLeftAt(LocalDateTime.now()); // 🔥 set ngày rời
+
+        projectMemberRepository.save(pm);
+
+        System.out.println("Member bị xóa khỏi project");
+    }
+
+    // member rời project
+    public void leaveProject(Long projectId) {
+
+        String username = SecurityContextHolder.getContext()
+                .getAuthentication()
+                .getName();
+
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy user"));
+
+        ProjectMember pm = projectMemberRepository
+                .findByProject_IdAndUser_Id(projectId, user.getId())
+                .orElseThrow(() -> new RuntimeException("Bạn không thuộc project này"));
+
+        if (pm.getLeftAt() != null) {
+            throw new RuntimeException("Bạn đã rời project rồi");
         }
 
-        projectMemberRepository.deleteByProject_IdAndUser_Id(projectId, userId);
+        pm.setLeftAt(LocalDateTime.now());
 
-        System.out.println("Xóa thành viên thành công");
+        projectMemberRepository.save(pm);
+
+        sendLeaveNotification(pm);
+
+        System.out.println("User tự rời project");
+    }
+
+    private void sendLeaveNotification(ProjectMember pm) {
+
+        Project project = pm.getProject();
+        User user = pm.getUser();
+
+        List<ProjectMember> members = projectMemberRepository
+                .findByProject_Id(project.getId());
+
+        for (ProjectMember m : members) {
+
+            if (m.getLeftAt() == null) { // chỉ gửi cho người còn trong team
+
+                Notification noti = new Notification();
+                noti.setUser(m.getUser());
+                noti.setTitle("Thành viên rời project");
+                noti.setContent(user.getUsername() + " đã rời khỏi project " + project.getProjectName());
+                noti.setType("SYSTEM");
+
+                notificationRepository.save(noti);
+            }
+        }
     }
 }

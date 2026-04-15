@@ -5,8 +5,13 @@ import com.pbl3.dto.request.UpdateProjectRequest;
 import com.pbl3.dto.response.ProjectResponse;
 import com.pbl3.entity.Project;
 import com.pbl3.entity.ProjectStatus;
+import com.pbl3.entity.User;
+import com.pbl3.entity.Role;
 import com.pbl3.repository.ProjectRepository;
+import com.pbl3.repository.UserRepository;
+
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -16,9 +21,27 @@ import java.util.List;
 public class ProjectService {
 
     private final ProjectRepository projectRepository;
+    private final UserRepository userRepository;
 
-    // CREATE
+    //  Lấy user hiện tại
+    private User getCurrentUser() {
+        String username = SecurityContextHolder.getContext()
+                .getAuthentication()
+                .getName();
+
+        return userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy user"));
+    }
+
+    // ================= CREATE =================
     public ProjectResponse createProject(CreateProjectRequest request) {
+
+        User currentUser = getCurrentUser();
+
+        //  Chỉ PM mới được tạo
+        if (currentUser.getRole() != Role.PROJECT_MANAGER) {
+            throw new RuntimeException("Chỉ Project Manager mới được tạo project");
+        }
 
         if (request.getEndDate().isBefore(request.getStartDate())) {
             throw new RuntimeException("Ngày kết thúc phải sau ngày bắt đầu");
@@ -31,6 +54,9 @@ public class ProjectService {
         project.setEndDate(request.getEndDate());
         project.setStatus(ProjectStatus.PLANNING);
 
+        //  SET MANAGER
+        project.setManager(currentUser);
+
         projectRepository.save(project);
 
         System.out.println("Tạo project thành công");
@@ -38,11 +64,18 @@ public class ProjectService {
         return mapToResponse(project);
     }
 
-    // UPDATE
+    // ================= UPDATE =================
     public ProjectResponse updateProject(Long id, UpdateProjectRequest request) {
+
+        User currentUser = getCurrentUser();
 
         Project project = projectRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy project"));
+
+        //  Chỉ manager mới được update
+        if (!project.getManager().getId().equals(currentUser.getId())) {
+            throw new RuntimeException("Bạn không có quyền update project này");
+        }
 
         if (request.getProjectName() != null) {
             project.setProjectName(request.getProjectName());
@@ -77,7 +110,25 @@ public class ProjectService {
         return mapToResponse(project);
     }
 
-    // GET ALL
+    // ================= DELETE =================
+    public void deleteProject(Long id) {
+
+        User currentUser = getCurrentUser();
+
+        Project project = projectRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy project"));
+
+        //  Chỉ manager mới được xóa
+        if (!project.getManager().getId().equals(currentUser.getId())) {
+            throw new RuntimeException("Bạn không có quyền xóa project này");
+        }
+
+        projectRepository.delete(project);
+
+        System.out.println("Xóa project thành công");
+    }
+
+    // ================= GET ALL =================
     public List<ProjectResponse> getAllProjects() {
         return projectRepository.findAll()
                 .stream()
@@ -85,7 +136,7 @@ public class ProjectService {
                 .toList();
     }
 
-    // GET BY ID
+    // ================= GET BY ID =================
     public ProjectResponse getProjectById(Long id) {
 
         Project project = projectRepository.findById(id)
@@ -94,31 +145,21 @@ public class ProjectService {
         return mapToResponse(project);
     }
 
-    // DELETE
-    public void deleteProject(Long id) {
-
-        Project project = projectRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy project"));
-
-        projectRepository.delete(project);
-
-        System.out.println("Xóa project thành công");
-    }
-
-    // Like Search 
+    // ================= SEARCH =================
     public List<Project> searchProjectByName(String name) {
         return projectRepository.findByProjectNameContainingIgnoreCase(name);
     }
 
-    // MAP DTO
+    // ================= MAP DTO =================
     private ProjectResponse mapToResponse(Project project) {
 
-    return new ProjectResponse(
-            project.getId(),
-            project.getProjectName(),
-            project.getDescription(),
-            project.getStartDate(),
-            project.getEndDate(),
-            project.getStatus());
+        return new ProjectResponse(
+                project.getId(),
+                project.getProjectName(),
+                project.getDescription(),
+                project.getStartDate(),
+                project.getEndDate(),
+                project.getStatus()
+        );
     }
 }
