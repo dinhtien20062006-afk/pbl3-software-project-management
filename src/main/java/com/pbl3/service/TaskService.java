@@ -1,6 +1,5 @@
 package com.pbl3.service;
 
-import com.pbl3.entity.Comment;
 import com.pbl3.dto.request.*;
 import com.pbl3.dto.response.ShowTaskResponse;
 import com.pbl3.entity.*;
@@ -47,6 +46,34 @@ public class TaskService {
                 .deadLine(task.getDeadline())
                 .build();
     }
+    //Xap xep task theo priority
+    public List<ShowTaskResponse> getAllTasksSortedByPriority() {
+    return taskRepository.findAll().stream()
+            .sorted((t1, t2) -> t2.getPriority().compareTo(t1.getPriority())) // Sắp xếp giảm dần
+            .map(this::mapToResponse)
+            .collect(Collectors.toList());
+    }
+    // Lấy danh sách Task cua 1 nguoi duoc giao
+    public List<ShowTaskResponse> getTasksByAssignee(Long userId) {
+    // Giả sử bạn đã viết findByAssigneeId trong TaskRepository
+    List<Task> tasks = taskRepository.findByAssigneeId(userId);
+    return tasks.stream()
+            .map(this::mapToResponse)
+            .collect(Collectors.toList());
+    }
+
+    public List<ShowTaskResponse> getTasksByPriority(String priority) {
+    try {
+        TaskPriority p = TaskPriority.valueOf(priority.toUpperCase());
+        return taskRepository.findByPriority(p).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    } catch (IllegalArgumentException e) {
+        throw new AppException(ErrorCode.INVALID_KEY);
+        }
+    }
+
+
 
     public Task createTask(TaskCreateRequest request) {
         Project project = projectRepository.findById(request.getProjectId())
@@ -98,8 +125,48 @@ public class TaskService {
 
         return mapToResponse(taskRepository.save(task)); 
     }
+    public void submitTask(Long taskId) {
+    Task task = taskRepository.findById(taskId)
+            .orElseThrow(() -> new AppException(ErrorCode.TASK_NOT_EXISTED));
+
+    // Chỉ cho phép gửi khi đang ở trạng thái xử lý
+    if (task.getStatus() == TaskStatus.IN_PROGRESS) {
+        task.setStatus(TaskStatus.PENDING_APPROVAL);
+        taskRepository.save(task);
+
+        // Gửi thông báo WebSocket cho Manager
+        if (task.getProject().getManager() != null) {
+            messagingTemplate.convertAndSendToUser(
+                task.getProject().getManager().getUsername(),
+                "/queue/notifications",
+                "Member đã hoàn thành Task: " + task.getTaskName() + ". Đang chờ bạn duyệt!"
+            );
+        }
+    }
+}
 
     @Transactional
+    public void reviewTask(Long taskId, boolean approved) {
+    Task task = taskRepository.findById(taskId)
+            .orElseThrow(() -> new AppException(ErrorCode.TASK_NOT_EXISTED));
+
+    if (approved) {
+        task.setStatus(TaskStatus.DONE);
+    } else {
+        task.setStatus(TaskStatus.IN_PROGRESS); // Trả về để làm lại
+    }
+    
+    taskRepository.save(task);
+
+    // Thông báo lại cho Member biết kết quả
+    if (task.getAssignee() != null) {
+        messagingTemplate.convertAndSendToUser(
+            task.getAssignee().getUsername(),
+            "/queue/notifications",
+            approved ? "Task của bạn đã được duyệt!" : "Task của bạn bị từ chối, vui lòng kiểm tra lại."
+        );
+    }
+}
     public void addComment(CommentRequest request) {
         Task task = taskRepository.findById(request.getTaskId())
                 .orElseThrow(() -> new AppException(ErrorCode.TASK_NOT_EXISTED));
@@ -127,5 +194,62 @@ public class TaskService {
                 "Task '" + task.getTaskName() + "' có bình luận mới."
             );
         }
+    }
+    @Transactional
+    public void updateComment(Long commentId, String newContent) {
+        Comment comment = commentRepository.findById(commentId)
+                .orElseThrow(() -> new AppException(ErrorCode.INVALID_KEY)); // Hoặc COMMENT_NOT_EXISTED
+        
+        if (newContent == null || newContent.trim().isEmpty()) {
+            throw new AppException(ErrorCode.INVALID_KEY);
+        }
+
+        comment.setContent(newContent);
+        commentRepository.save(comment);
+    }
+
+    // 2. Xóa Comment
+    @Transactional
+    public void deleteComment(Long commentId) {
+        if (!commentRepository.existsById(commentId)) {
+            throw new AppException(ErrorCode.INVALID_KEY);
+        }
+        commentRepository.deleteById(commentId);
+    }
+
+    // --- DỌN DẸP VÀ TỐI ƯU CÁC HÀM SHOW ---
+
+    // Lấy chi tiết 1 Task (Hàm Show Task)
+    public ShowTaskResponse getTaskById(Long taskId) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new AppException(ErrorCode.TASK_NOT_EXISTED));
+        return mapToResponse(task);
+    }
+
+    // 1. Lấy tất cả bình luận của một Task
+    public List<Comment> getCommentsByTaskId(Long taskId) {
+        if (!taskRepository.existsById(taskId)) {
+            throw new AppException(ErrorCode.TASK_NOT_EXISTED);
+        }
+        // Giả sử trong CommentRepository bạn có hàm findByTask_Id(Long taskId)
+        return commentRepository.findByTask_Id(taskId);
+    }
+
+    // 2. Lấy bình luận của User
+    public List<Comment> showCommentsByUserId(Long userId) {
+        // Hãy chắc chắn CommentRepository có hàm này
+        return commentRepository.findByUser_Id(userId);
+    }
+
+    // 3. FIX LỖI: Hàm này trước đó trả về List<Task> sai kiểu, 
+    // nếu bạn muốn lấy task thì nên đặt tên là getTaskById
+    public Task getTaskByIdRaw(Long id) {
+        return taskRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.TASK_NOT_EXISTED));
+    }
+
+    // 4. Hàm đếm status
+    public Long countByStatus(Long projectId, String status) {
+        return taskRepository.countByStatus(projectId, status);
     }
 }

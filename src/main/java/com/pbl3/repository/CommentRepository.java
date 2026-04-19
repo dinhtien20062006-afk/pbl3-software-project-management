@@ -7,5 +7,7 @@ import java.util.List;
 
 @Repository
 public interface CommentRepository extends JpaRepository<Comment, Long> {
-    List<Comment> findByTaskId(Long taskId);
+    // Sửa từ Task_Id thành Task_TaskId
+    List<Comment> findByTask_Id(Long taskId);
+    List<Comment> findByUser_Id(Long userId);
 }

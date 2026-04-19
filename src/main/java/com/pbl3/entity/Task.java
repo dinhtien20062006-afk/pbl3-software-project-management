@@ -23,6 +23,7 @@ import java.time.LocalDateTime;
 public class Task {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id")
     private Long id;
 
     @Column(name = "task_name", nullable = false)
@@ -54,4 +55,9 @@ public class Task {
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+    @Column(name = "completed_at")
+    private LocalDateTime completedAt;
 }

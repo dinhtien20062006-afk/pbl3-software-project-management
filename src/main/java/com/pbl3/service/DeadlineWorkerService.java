@@ -2,6 +2,7 @@ package com.pbl3.service;
 
 import com.pbl3.entity.NotificationType;
 import com.pbl3.entity.Task;
+import com.pbl3.entity.TaskStatus;
 import com.pbl3.repository.TaskRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -25,7 +26,7 @@ public class DeadlineWorkerService {
         
         // Giả sử bạn viết thêm hàm này trong TaskRepository
         List<Task> upcomingTasks = taskRepository.findAllByDeadlineBetween(
-            LocalDateTime.now(), tomorrow
+            LocalDateTime.now(), tomorrow, TaskStatus.IN_PROGRESS
         );
 
        for (Task task : upcomingTasks) {
