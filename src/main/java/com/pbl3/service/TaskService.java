@@ -5,7 +5,6 @@ import com.pbl3.dto.response.ShowTaskResponse;
 import com.pbl3.entity.*;
 import com.pbl3.repository.*;
 import lombok.RequiredArgsConstructor;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.pbl3.exception.AppException;
@@ -21,7 +20,7 @@ public class TaskService {
     private final TaskRepository taskRepository;
     private final ProjectRepository projectRepository;
     private final CommentRepository commentRepository;
-    private final SimpMessagingTemplate messagingTemplate;
+    private final NotificationService notificationService;
 
     // Lấy danh sách Task của một Project
     public List<ShowTaskResponse> getTasksByProjectId(Long projectId) {
@@ -73,7 +72,15 @@ public class TaskService {
         }
     }
 
-
+    public List<ShowTaskResponse> findTasksByStatus(String status) {
+    try {        TaskStatus s = TaskStatus.valueOf(status.toUpperCase());
+        return taskRepository.findByStatus(s).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    } catch (IllegalArgumentException e) {
+        throw new AppException(ErrorCode.INVALID_KEY);
+        }
+    }
 
     public Task createTask(TaskCreateRequest request) {
         Project project = projectRepository.findById(request.getProjectId())
@@ -103,47 +110,61 @@ public class TaskService {
         taskRepository.deleteById(taskId);
     }
 
-    public ShowTaskResponse updateTask(Long taskId, TaskUpdateRequest request) {
-        Task task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new AppException(ErrorCode.TASK_NOT_EXISTED));
-
-        task.setTaskName(request.getTaskName());
-        task.setDescription(request.getDescription());
-        task.setStartDate(request.getStartDate());
-        task.setDeadline(request.getDeadline());
-        
-        try {
-            if (request.getPriority() != null) {
-                task.setPriority(TaskPriority.valueOf(request.getPriority().toUpperCase()));
-            }
-            if (request.getStatus() != null) {
-                task.setStatus(TaskStatus.valueOf(request.getStatus().toUpperCase()));
-            }
-        } catch (IllegalArgumentException e) {
-            throw new AppException(ErrorCode.INVALID_KEY);
-        }
-
-        return mapToResponse(taskRepository.save(task)); 
-    }
-    public void submitTask(Long taskId) {
+   public ShowTaskResponse updateTask(Long taskId, TaskUpdateRequest request) {
     Task task = taskRepository.findById(taskId)
             .orElseThrow(() -> new AppException(ErrorCode.TASK_NOT_EXISTED));
 
-    // Chỉ cho phép gửi khi đang ở trạng thái xử lý
-    if (task.getStatus() == TaskStatus.IN_PROGRESS) {
-        task.setStatus(TaskStatus.PENDING_APPROVAL);
-        taskRepository.save(task);
+    // 1. Cập nhật các trường thông thường
+    if (request.getTaskName() != null) task.setTaskName(request.getTaskName());
+    if (request.getDescription() != null) task.setDescription(request.getDescription());
+    if (request.getStartDate() != null) task.setStartDate(request.getStartDate());
+    if (request.getDeadline() != null) task.setDeadline(request.getDeadline());
+    
+    // 2. Cập nhật Enum (nếu có)
+    try {
+        if (request.getPriority() != null) {
+            task.setPriority(TaskPriority.valueOf(request.getPriority().toUpperCase()));
+        }
+        if (request.getStatus() != null) {
+            task.setStatus(TaskStatus.valueOf(request.getStatus().toUpperCase()));
+        }
+    } catch (IllegalArgumentException e) {
+        throw new AppException(ErrorCode.INVALID_KEY);
+    }
 
-        // Gửi thông báo WebSocket cho Manager
-        if (task.getProject().getManager() != null) {
-            messagingTemplate.convertAndSendToUser(
-                task.getProject().getManager().getUsername(),
-                "/queue/notifications",
-                "Member đã hoàn thành Task: " + task.getTaskName() + ". Đang chờ bạn duyệt!"
+    // 3. Chỉ lưu vào DB một lần duy nhất
+    Task updatedTask = taskRepository.save(task);
+    ShowTaskResponse response = mapToResponse(updatedTask);
+
+    // 4. Gửi thông báo (nếu có assignee)
+    if (task.getAssignee() != null) {
+        notificationService.sendNotification(
+            task.getAssignee(),
+            "Task đã được cập nhật",
+            "Task " + updatedTask.getTaskName() + " vừa thay đổi trạng thái hoặc thông tin.",
+            NotificationType.TASK_UPDATED
+        );
+    }
+
+    return response;
+}
+    public void submitTask(Long taskId) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new AppException(ErrorCode.TASK_NOT_EXISTED));
+
+        if (task.getStatus() == TaskStatus.IN_PROGRESS) {
+            task.setStatus(TaskStatus.PENDING_APPROVAL);
+            taskRepository.save(task);
+
+            // Gửi thông báo vào DB để member/leader thấy
+            notificationService.sendNotification(
+                task.getAssignee(), // Người được giao hoặc chủ dự án
+                "Task đã được nộp", 
+                "Task " + task.getTaskName() + " vừa được chuyển sang trạng thái chờ duyệt.",
+                NotificationType.DEADLINE_REMINDER // Hoặc loại bạn tự định nghĩa
             );
         }
     }
-}
 
     @Transactional
     public void reviewTask(Long taskId, boolean approved) {
@@ -157,15 +178,6 @@ public class TaskService {
     }
     
     taskRepository.save(task);
-
-    // Thông báo lại cho Member biết kết quả
-    if (task.getAssignee() != null) {
-        messagingTemplate.convertAndSendToUser(
-            task.getAssignee().getUsername(),
-            "/queue/notifications",
-            approved ? "Task của bạn đã được duyệt!" : "Task của bạn bị từ chối, vui lòng kiểm tra lại."
-        );
-    }
 }
     public void addComment(CommentRequest request) {
         Task task = taskRepository.findById(request.getTaskId())
@@ -181,19 +193,6 @@ public class TaskService {
                 .task(task)
                 .build();
         commentRepository.save(comment);
-
-        // WebSocket Notify
-        String topic = "/topic/task/" + request.getTaskId();
-        messagingTemplate.convertAndSend(topic, "Người dùng " + request.getUserName() + " vừa bình luận.");
-
-        if (task.getProject().getManager() != null) {
-            String ownerUsername = task.getProject().getManager().getUsername();
-            messagingTemplate.convertAndSendToUser(
-                ownerUsername, 
-                "/queue/notifications", 
-                "Task '" + task.getTaskName() + "' có bình luận mới."
-            );
-        }
     }
     @Transactional
     public void updateComment(Long commentId, String newContent) {
