@@ -9,12 +9,16 @@ import java.time.LocalDateTime;
 @Builder
 public class ProjectMemberResponse {
 
-    private Long projectId;
     private Long userId;
 
-    private String projectName;
-    private String username;
+    private String name;
 
-    private String projectRole;
+    private String role;
+
     private LocalDateTime joinedAt;
+
+    private LocalDateTime leftAt; 
 }
+
+
+   

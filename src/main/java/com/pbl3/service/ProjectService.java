@@ -1,94 +1,155 @@
 package com.pbl3.service;
 
-import com.pbl3.dto.request.ProjectRequest;
+import com.pbl3.dto.request.CreateProjectRequest;
+import com.pbl3.dto.request.UpdateProjectRequest;
 import com.pbl3.dto.response.ProjectResponse;
 import com.pbl3.entity.Project;
 import com.pbl3.entity.Task;
 import com.pbl3.entity.TaskStatus;
+
+import com.pbl3.entity.ProjectStatus;
+import com.pbl3.entity.User;
+import com.pbl3.entity.Role;
 import com.pbl3.repository.ProjectRepository;
-import org.springframework.stereotype.Service;
+import com.pbl3.repository.UserRepository;
 import com.pbl3.exception.AppException;
 import com.pbl3.exception.ErrorCode;
+
 import lombok.RequiredArgsConstructor;
 import com.pbl3.entity.ProjectStatistics;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor // Sử dụng Lombok để tự động tạo Constructor cho final fields
+@RequiredArgsConstructor
 public class ProjectService {
 
-    private final ProjectRepository repo;
+    private final ProjectRepository projectRepository;
+    private final UserRepository userRepository;
 
-    // ===== CREATE =====
-    public ProjectResponse create(ProjectRequest dto) {
-        // Validate ngày trước khi build object
-        if (dto.getStartDate() != null && dto.getEndDate() != null) {
-            if (dto.getEndDate().isBefore(dto.getStartDate())) {
-                // Sử dụng mã lỗi INVALID_KEY hoặc thêm mã riêng cho Date nếu muốn
-                throw new AppException(ErrorCode.INVALID_KEY); 
-            }
+    //  Lấy user hiện tại
+    private User getCurrentUser() {
+        String username = SecurityContextHolder.getContext()
+                .getAuthentication()
+                .getName();
+
+        return userRepository.findByUsername(username)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+    }
+
+    // ================= CREATE =================
+    public ProjectResponse createProject(CreateProjectRequest request) {
+
+        User currentUser = getCurrentUser();
+
+        // chỉ PM được tạo
+        if (currentUser.getRole() != Role.PROJECT_MANAGER) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
-        // Convert DTO → Entity
-        Project p = Project.builder()
-                .projectName(dto.getProjectName())
-                .description(dto.getDescription())
-                .startDate(dto.getStartDate())
-                .endDate(dto.getEndDate())
-                .build();
+        if (request.getEndDate().isBefore(request.getStartDate())) {
+            throw new AppException(ErrorCode.INVALID_KEY);
+        }
 
-        Project saved = repo.save(p);
-        return mapToResponse(saved);
+        Project project = new Project();
+        project.setProjectName(request.getProjectName());
+        project.setDescription(request.getDescription());
+        project.setStartDate(request.getStartDate());
+        project.setEndDate(request.getEndDate());
+        project.setStatus(ProjectStatus.PLANNING);
+
+        //  set manager
+        project.setManager(currentUser);
+
+        projectRepository.save(project);
+
+        return mapToResponse(project);
     }
 
-    // ===== GET ALL =====
-    public List<ProjectResponse> getAll() {
-        return repo.findAll()
-                .stream()
-                .map(this::mapToResponse)
-                .collect(Collectors.toList());
-    }
+    // ================= UPDATE =================
+    public ProjectResponse updateProject(Long id, UpdateProjectRequest request) {
 
-    // ===== GET BY ID =====
-    public ProjectResponse getById(Long id) {
-        Project p = repo.findById(id)
+        User currentUser = getCurrentUser();
+
+        Project project = projectRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.PROJECT_NOT_EXISTED));
 
-        return mapToResponse(p);
-    }
+        //  chỉ manager mới update
+        if (!project.getManager().getId().equals(currentUser.getId())) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
 
-    // ===== UPDATE =====
-    public ProjectResponse update(Long id, ProjectRequest dto) {
-        Project p = repo.findById(id)
-                .orElseThrow(() -> new AppException(ErrorCode.PROJECT_NOT_EXISTED));
+        if (request.getProjectName() != null) {
+            project.setProjectName(request.getProjectName());
+        }
 
-        // Validate ngày khi cập nhật
-        if (dto.getStartDate() != null && dto.getEndDate() != null) {
-            if (dto.getEndDate().isBefore(dto.getStartDate())) {
+        if (request.getDescription() != null) {
+            project.setDescription(request.getDescription());
+        }
+
+        if (request.getStartDate() != null) {
+            project.setStartDate(request.getStartDate());
+        }
+
+        if (request.getEndDate() != null) {
+            project.setEndDate(request.getEndDate());
+        }
+
+        if (request.getStatus() != null) {
+            project.setStatus(request.getStatus());
+        }
+
+        if (project.getStartDate() != null && project.getEndDate() != null) {
+            if (project.getEndDate().isBefore(project.getStartDate())) {
                 throw new AppException(ErrorCode.INVALID_KEY);
             }
         }
 
-        p.setProjectName(dto.getProjectName());
-        p.setDescription(dto.getDescription());
-        p.setStartDate(dto.getStartDate());
-        p.setEndDate(dto.getEndDate());
+        projectRepository.save(project);
 
-        Project saved = repo.save(p);
-        return mapToResponse(saved);
+        return mapToResponse(project);
     }
 
-    // ===== DELETE =====
-    public void delete(Long id) {
-        if (!repo.existsById(id)) {
-            throw new AppException(ErrorCode.PROJECT_NOT_EXISTED);
+    // ================= DELETE =================
+    public void deleteProject(Long id) {
+
+        User currentUser = getCurrentUser();
+
+        Project project = projectRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.PROJECT_NOT_EXISTED));
+
+        //  chỉ manager mới xóa
+        if (!project.getManager().getId().equals(currentUser.getId())) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
         }
-        repo.deleteById(id);
+
+        projectRepository.delete(project);
     }
 
-    // Hàm phụ trợ dùng chung để tránh lặp code convert Entity -> Response
+    // ================= GET ALL =================
+    public List<ProjectResponse> getAllProjects() {
+        return projectRepository.findAll()
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    // ================= GET BY ID =================
+    public ProjectResponse getProjectById(Long id) {
+
+        Project project = projectRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.PROJECT_NOT_EXISTED));
+
+        return mapToResponse(project);
+    }
+
+    public List<Project> searchProjectByName(String name) {
+        return projectRepository.findByProjectNameContainingIgnoreCase(name);
+    }
+    
+    // ================= MAP =================
     private ProjectResponse mapToResponse(Project project) {
         return ProjectResponse.builder()
                 .id(project.getId())
@@ -101,7 +162,7 @@ public class ProjectService {
     }
     // Trong ProjectService.java
 public ProjectStatistics getProjectStatistics(Long projectId) {
-    Project project = repo.findById(projectId)
+    Project project = projectRepository.findById(projectId)
             .orElseThrow(() -> new AppException(ErrorCode.PROJECT_NOT_EXISTED));
 
     List<Task> tasks = project.getTasks();

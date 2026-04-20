@@ -3,8 +3,10 @@ package com.pbl3.dto.request;
 import lombok.Data;
 import java.time.LocalDate;
 
+import com.pbl3.entity.ProjectStatus;
+
 @Data 
-public class ProjectRequest {
+public class UpdateProjectRequest {
 
     // Dữ liệu client gửi lên
 
@@ -16,6 +18,6 @@ public class ProjectRequest {
 
     private LocalDate endDate;
 
-    //  Không có id
-    //  Không có status
+    private ProjectStatus status; 
+    
 }

@@ -2,6 +2,9 @@ package com.pbl3.service;
 
 import com.pbl3.dto.request.ProjectMemberRequest;
 import com.pbl3.dto.response.ProjectMemberResponse;
+import com.pbl3.entity.NotificationType;
+import com.pbl3.entity.Notification; 
+import com.pbl3.repository.NotificationRepository;
 import com.pbl3.entity.Project;
 import com.pbl3.entity.ProjectMember;
 import com.pbl3.entity.User;
@@ -9,64 +12,122 @@ import com.pbl3.repository.ProjectMemberRepository;
 import com.pbl3.repository.ProjectRepository;
 import com.pbl3.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class ProjectMemberService {
 
-    private final ProjectMemberRepository repo;
-    private final ProjectRepository projectRepo;
-    private final UserRepository userRepo;
+    private final ProjectRepository projectRepository;
+    private final UserRepository userRepository;
+    private final ProjectMemberRepository projectMemberRepository;
+    private final NotificationRepository notificationRepository;
 
-    public ProjectMemberResponse addMember(ProjectMemberRequest req) {
+    // Lấy danh sách member
+    public List<ProjectMemberResponse> getMembers(Long projectId) {
 
-        if (repo.existsByProject_IdAndUser_Id(req.getProjectId(), req.getUserId())) {
-            throw new RuntimeException("Người dùng đã tồn tại trong dự án");
-        }
+        projectRepository.findById(projectId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy project"));
 
-        Project project = projectRepo.findById(req.getProjectId())
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy dự án"));
+        return projectMemberRepository.findByProject_Id(projectId)
+        .stream()
+        .map(pm -> ProjectMemberResponse.builder()
+                .userId(pm.getUser().getId())
+                .name(pm.getUser().getFullName() + " (" + pm.getUser().getUsername() + ")")
+                .role(pm.getProjectRole())
+                .build()
+        )
+        .toList();
+    }
 
-        User user = userRepo.findById(req.getUserId())
+    // Thêm member
+    public void addMember(Long projectId, ProjectMemberRequest request) {
+
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy project"));
+
+        User user = userRepository.findById(request.getUserId())
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
+
+        if (projectMemberRepository.existsByProject_IdAndUser_Id(projectId, request.getUserId())) {
+            throw new RuntimeException("Thành viên đã tồn tại trong project");
+        }
 
         ProjectMember pm = ProjectMember.builder()
                 .project(project)
                 .user(user)
-                .projectRole(req.getProjectRole())
+                .projectRole(request.getRole()) // chú ý field mới
                 .joinedAt(LocalDateTime.now())
                 .build();
 
-        repo.save(pm);
+        projectMemberRepository.save(pm);
 
-        return mapToResponse(pm);
+        System.out.println("Thêm thành viên thành công");
     }
 
-    public List<ProjectMemberResponse> getMembers(Long projectId) {
-        return repo.findByProject_Id(projectId)
-                .stream()
-                .map(this::mapToResponse)
-                .collect(Collectors.toList());
-    }
-
+    // Xóa member
     public void removeMember(Long projectId, Long userId) {
-        repo.deleteByProject_IdAndUser_Id(projectId, userId);
+
+        ProjectMember pm = projectMemberRepository
+                .findByProject_IdAndUser_Id(projectId, userId)
+                .orElseThrow(() -> new RuntimeException("Thành viên không tồn tại"));
+
+        pm.setLeftAt(LocalDateTime.now());
+        projectMemberRepository.save(pm);
+
+        System.out.println("Member bị xóa khỏi project");
     }
 
-    // Mapping: Chuyển dữ liệu từ Entity -> DTO
-    private ProjectMemberResponse mapToResponse(ProjectMember pm) {
-        return ProjectMemberResponse.builder()
-                .projectId(pm.getProject().getId())
-                .userId(pm.getUser().getId())
-                .projectName(pm.getProject().getProjectName())
-                .username(pm.getUser().getUsername())
-                .projectRole(pm.getProjectRole())
-                .joinedAt(pm.getJoinedAt())
-                .build();
+    // member rời project
+    public void leaveProject(Long projectId) {
+
+        String username = SecurityContextHolder.getContext()
+                .getAuthentication()
+                .getName();
+
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy user"));
+
+        ProjectMember pm = projectMemberRepository
+                .findByProject_IdAndUser_Id(projectId, user.getId())
+                .orElseThrow(() -> new RuntimeException("Bạn không thuộc project này"));
+
+        if (pm.getLeftAt() != null) {
+            throw new RuntimeException("Bạn đã rời project rồi");
+        }
+
+        pm.setLeftAt(LocalDateTime.now());
+
+        projectMemberRepository.save(pm);
+
+        sendLeaveNotification(pm);
+
+        System.out.println("User tự rời project");
+    }
+
+    private void sendLeaveNotification(ProjectMember pm) {
+
+        Project project = pm.getProject();
+        User user = pm.getUser();
+
+        List<ProjectMember> members = projectMemberRepository
+                .findByProject_Id(project.getId());
+
+        for (ProjectMember m : members) {
+
+            if (m.getLeftAt() == null) { 
+                Notification noti = new Notification();
+                noti.setUser(m.getUser());
+                noti.setTitle("Thành viên rời project");
+                noti.setContent(user.getUsername() + " đã rời khỏi project " + project.getProjectName());
+                noti.setType(NotificationType.SYSTEM); 
+                notificationRepository.save(noti);
+            }
+        }
     }
 }

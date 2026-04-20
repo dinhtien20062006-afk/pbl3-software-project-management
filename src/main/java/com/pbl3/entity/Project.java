@@ -13,7 +13,7 @@ import java.util.List;
 @Setter 
 @NoArgsConstructor 
 @AllArgsConstructor 
-@Builder // Tạo object kiểu builder
+@Builder 
 public class Project {
 
     @Id 
@@ -30,10 +30,8 @@ public class Project {
 
     private LocalDate endDate; 
 
-    @Enumerated(EnumType.STRING) 
-    @Builder.Default
-    private ProjectStatus status = ProjectStatus.PLANNING; 
-    // Trạng thái mặc định
+    private ProjectStatus status; 
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "manager_id") // Khớp với tên cột trong file SQL của bạn
     private User manager;

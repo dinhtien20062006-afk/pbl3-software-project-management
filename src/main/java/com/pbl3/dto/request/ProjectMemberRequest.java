@@ -4,7 +4,7 @@ import lombok.Data;
 
 @Data
 public class ProjectMemberRequest {
-    private Long projectId;
     private Long userId;
-    private String projectRole;
+    
+    private String role;
 }
