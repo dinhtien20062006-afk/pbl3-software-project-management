@@ -4,8 +4,10 @@ import com.pbl3.dto.request.CreateProjectRequest;
 import com.pbl3.dto.request.UpdateProjectRequest;
 import com.pbl3.dto.response.ProjectResponse;
 import com.pbl3.entity.Project;
+import com.pbl3.entity.ProjectStatistics;
 import com.pbl3.service.ProjectService;
 import lombok.RequiredArgsConstructor;
+import com.pbl3.dto.response.*;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -58,5 +60,11 @@ public class ProjectController {
     @GetMapping("/search")
     public ResponseEntity<List<Project>> searchProject(@RequestParam String name) {
         return ResponseEntity.ok(projectService.searchProjectByName(name));
+    }
+    @GetMapping("/{id}/statistics")
+    public ApiResponse<ProjectStatistics> getStatistics(@PathVariable Long id) {
+        return ApiResponse.<ProjectStatistics>builder()
+                .result(projectService.getProjectStatistics(id))
+                .build();
     }
 }
