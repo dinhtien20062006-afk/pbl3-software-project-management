@@ -3,11 +3,14 @@ package com.pbl3.service;
 import com.pbl3.dto.request.ProjectRequest;
 import com.pbl3.dto.response.ProjectResponse;
 import com.pbl3.entity.Project;
+import com.pbl3.entity.Task;
+import com.pbl3.entity.TaskStatus;
 import com.pbl3.repository.ProjectRepository;
 import org.springframework.stereotype.Service;
 import com.pbl3.exception.AppException;
 import com.pbl3.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import com.pbl3.entity.ProjectStatistics;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -96,4 +99,33 @@ public class ProjectService {
                 .status(project.getStatus())
                 .build();
     }
+    // Trong ProjectService.java
+public ProjectStatistics getProjectStatistics(Long projectId) {
+    Project project = repo.findById(projectId)
+            .orElseThrow(() -> new AppException(ErrorCode.PROJECT_NOT_EXISTED));
+
+    List<Task> tasks = project.getTasks();
+    
+    // Nếu chưa có task nào thì trả về 0 hết
+    if (tasks.isEmpty()) {
+        return ProjectStatistics.builder()
+                .totalTasks(0L)
+                .completedTasks(0L)
+                .completionPercentage(0.0)
+                .build();
+    }
+
+    long total = tasks.size();
+    long completed = tasks.stream()
+            .filter(t -> t.getStatus() == TaskStatus.DONE)
+            .count();
+    
+    double percent = ((double) completed / total) * 100;
+
+    return ProjectStatistics.builder()
+            .totalTasks(total)
+            .completedTasks(completed)
+            .completionPercentage(percent)
+            .build();
+}   
 }
