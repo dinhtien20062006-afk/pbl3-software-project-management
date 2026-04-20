@@ -22,9 +22,11 @@ public class Notification {
     @Enumerated(EnumType.STRING)
     private NotificationType type; // Tạo Enum: TASK_ASSIGNED, DEADLINE_REMINDER...
 
+    @Builder.Default
     @Column(name = "is_read")
     private boolean isRead = false;
 
+    @Builder.Default
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
 }

@@ -1,9 +1,4 @@
 package com.pbl3.entity;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Table;
-import jakarta.persistence.Id;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -27,5 +22,6 @@ public class Comment {
     @JoinColumn(name = "user_id")
     private User user;
 
+    @Builder.Default // Thêm dòng này vào
     private LocalDateTime createdAt = LocalDateTime.now();
 }
