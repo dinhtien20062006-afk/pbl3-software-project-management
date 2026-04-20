@@ -77,8 +77,7 @@ public class ProjectMemberService {
                 .findByProject_IdAndUser_Id(projectId, userId)
                 .orElseThrow(() -> new RuntimeException("Thành viên không tồn tại"));
 
-        pm.setLeftAt(LocalDateTime.now()); // 🔥 set ngày rời
-
+        pm.setLeftAt(LocalDateTime.now());
         projectMemberRepository.save(pm);
 
         System.out.println("Member bị xóa khỏi project");

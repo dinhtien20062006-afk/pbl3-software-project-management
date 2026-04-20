@@ -1,0 +1,23 @@
+package com.pbl3.entity;
+
+public enum AuditActionType {
+
+    CREATE_TASK,
+    UPDATE_TASK,
+    DELETE_TASK,
+
+    UPDATE_STATUS,
+    CHANGE_DEADLINE,
+
+    ASSIGN_TASK,
+    REMOVE_ASSIGNMENT,
+
+    ADD_COMMENT,
+
+    CREATE_PROJECT,
+    UPDATE_PROJECT,
+    DELETE_PROJECT,
+
+    ADD_MEMBER,
+    REMOVE_MEMBER
+}

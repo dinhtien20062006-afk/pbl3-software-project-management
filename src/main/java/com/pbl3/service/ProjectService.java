@@ -25,7 +25,7 @@ public class ProjectService {
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
 
-    // 🔥 Lấy user hiện tại
+    //  Lấy user hiện tại
     private User getCurrentUser() {
         String username = SecurityContextHolder.getContext()
                 .getAuthentication()
@@ -40,7 +40,7 @@ public class ProjectService {
 
         User currentUser = getCurrentUser();
 
-        // 🔥 chỉ PM được tạo
+        // chỉ PM được tạo
         if (currentUser.getRole() != Role.PROJECT_MANAGER) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
@@ -56,7 +56,7 @@ public class ProjectService {
         project.setEndDate(request.getEndDate());
         project.setStatus(ProjectStatus.PLANNING);
 
-        // 🔥 set manager
+        //  set manager
         project.setManager(currentUser);
 
         projectRepository.save(project);
@@ -72,7 +72,7 @@ public class ProjectService {
         Project project = projectRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.PROJECT_NOT_EXISTED));
 
-        // 🔥 chỉ manager mới update
+        //  chỉ manager mới update
         if (!project.getManager().getId().equals(currentUser.getId())) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
@@ -116,7 +116,7 @@ public class ProjectService {
         Project project = projectRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.PROJECT_NOT_EXISTED));
 
-        // 🔥 chỉ manager mới xóa
+        //  chỉ manager mới xóa
         if (!project.getManager().getId().equals(currentUser.getId())) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
