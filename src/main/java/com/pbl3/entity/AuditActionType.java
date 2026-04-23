@@ -6,9 +6,6 @@ public enum AuditActionType {
     UPDATE_TASK,
     DELETE_TASK,
 
-    UPDATE_STATUS,
-    CHANGE_DEADLINE,
-
     ASSIGN_TASK,
     REMOVE_ASSIGNMENT,
 
@@ -19,5 +16,6 @@ public enum AuditActionType {
     DELETE_PROJECT,
 
     ADD_MEMBER,
-    REMOVE_MEMBER
+    REMOVE_MEMBER,
+    LEAVE_PROJECT
 }

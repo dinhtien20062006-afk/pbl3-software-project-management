@@ -7,6 +7,6 @@ public enum NotificationType {
     COMMENT_ADDED,     // Khi có người bình luận
     TASK_SUBMITTED,    // Khi nộp task
     TASK_DONE,         // Khi task được duyệt xong
-    DEADLINE_REMINDER,
-    SYSTEM  // Nhắc nhở hạn chót
+    DEADLINE_REMINDER, // Nhắc nhở hạn chót
+    SYSTEM  
 }

@@ -2,21 +2,15 @@ package com.pbl3.service;
 
 import com.pbl3.dto.request.CreateProjectRequest;
 import com.pbl3.dto.request.UpdateProjectRequest;
+import com.pbl3.dto.request.AuditLogRequest;
 import com.pbl3.dto.response.ProjectResponse;
-import com.pbl3.entity.Project;
-import com.pbl3.entity.Task;
-import com.pbl3.entity.TaskStatus;
-
-import com.pbl3.entity.ProjectStatus;
-import com.pbl3.entity.User;
-import com.pbl3.entity.Role;
+import com.pbl3.entity.*;
 import com.pbl3.repository.ProjectRepository;
 import com.pbl3.repository.UserRepository;
 import com.pbl3.exception.AppException;
 import com.pbl3.exception.ErrorCode;
 
 import lombok.RequiredArgsConstructor;
-import com.pbl3.entity.ProjectStatistics;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
@@ -28,6 +22,7 @@ public class ProjectService {
 
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
+    private final AuditLogService auditLogService;
 
     //  Lấy user hiện tại
     private User getCurrentUser() {
@@ -44,7 +39,6 @@ public class ProjectService {
 
         User currentUser = getCurrentUser();
 
-        // chỉ PM được tạo
         if (currentUser.getRole() != Role.PROJECT_MANAGER) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
@@ -59,11 +53,21 @@ public class ProjectService {
         project.setStartDate(request.getStartDate());
         project.setEndDate(request.getEndDate());
         project.setStatus(ProjectStatus.PLANNING);
-
-        //  set manager
         project.setManager(currentUser);
 
         projectRepository.save(project);
+
+        //  LOG
+        auditLogService.createLog(
+                AuditLogRequest.builder()
+                        .entityType("PROJECT")
+                        .entityId(project.getId())
+                        .userId(currentUser.getId())
+                        .actionType("CREATE_PROJECT")
+                        .oldValue("N/A")
+                        .newValue(project.getProjectName())
+                        .build()
+        );
 
         return mapToResponse(project);
     }
@@ -76,10 +80,12 @@ public class ProjectService {
         Project project = projectRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.PROJECT_NOT_EXISTED));
 
-        //  chỉ manager mới update
         if (!project.getManager().getId().equals(currentUser.getId())) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
+
+        //  lưu old value
+        String oldValue = project.getProjectName();
 
         if (request.getProjectName() != null) {
             project.setProjectName(request.getProjectName());
@@ -109,6 +115,18 @@ public class ProjectService {
 
         projectRepository.save(project);
 
+        //  LOG
+        auditLogService.createLog(
+                AuditLogRequest.builder()
+                        .entityType("PROJECT")
+                        .entityId(project.getId())
+                        .userId(currentUser.getId())
+                        .actionType("UPDATE_PROJECT")
+                        .oldValue(oldValue)
+                        .newValue(project.getProjectName())
+                        .build()
+        );
+
         return mapToResponse(project);
     }
 
@@ -120,12 +138,25 @@ public class ProjectService {
         Project project = projectRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.PROJECT_NOT_EXISTED));
 
-        //  chỉ manager mới xóa
         if (!project.getManager().getId().equals(currentUser.getId())) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
+        String oldValue = project.getProjectName();
+
         projectRepository.delete(project);
+
+        //  LOG
+        auditLogService.createLog(
+                AuditLogRequest.builder()
+                        .entityType("PROJECT")
+                        .entityId(id)
+                        .userId(currentUser.getId())
+                        .actionType("DELETE_PROJECT")
+                        .oldValue(oldValue)
+                        .newValue("DELETED")
+                        .build()
+        );
     }
 
     // ================= GET ALL =================
@@ -148,7 +179,7 @@ public class ProjectService {
     public List<Project> searchProjectByName(String name) {
         return projectRepository.findByProjectNameContainingIgnoreCase(name);
     }
-    
+
     // ================= MAP =================
     private ProjectResponse mapToResponse(Project project) {
         return ProjectResponse.builder()
@@ -160,33 +191,34 @@ public class ProjectService {
                 .status(project.getStatus())
                 .build();
     }
-    // Trong ProjectService.java
-public ProjectStatistics getProjectStatistics(Long projectId) {
-    Project project = projectRepository.findById(projectId)
-            .orElseThrow(() -> new AppException(ErrorCode.PROJECT_NOT_EXISTED));
 
-    List<Task> tasks = project.getTasks();
-    
-    // Nếu chưa có task nào thì trả về 0 hết
-    if (tasks.isEmpty()) {
+    // ================= STATISTICS =================
+    public ProjectStatistics getProjectStatistics(Long projectId) {
+
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new AppException(ErrorCode.PROJECT_NOT_EXISTED));
+
+        List<Task> tasks = project.getTasks();
+
+        if (tasks.isEmpty()) {
+            return ProjectStatistics.builder()
+                    .totalTasks(0L)
+                    .completedTasks(0L)
+                    .completionPercentage(0.0)
+                    .build();
+        }
+
+        long total = tasks.size();
+        long completed = tasks.stream()
+                .filter(t -> t.getStatus() == TaskStatus.DONE)
+                .count();
+
+        double percent = ((double) completed / total) * 100;
+
         return ProjectStatistics.builder()
-                .totalTasks(0L)
-                .completedTasks(0L)
-                .completionPercentage(0.0)
+                .totalTasks(total)
+                .completedTasks(completed)
+                .completionPercentage(percent)
                 .build();
     }
-
-    long total = tasks.size();
-    long completed = tasks.stream()
-            .filter(t -> t.getStatus() == TaskStatus.DONE)
-            .count();
-    
-    double percent = ((double) completed / total) * 100;
-
-    return ProjectStatistics.builder()
-            .totalTasks(total)
-            .completedTasks(completed)
-            .completionPercentage(percent)
-            .build();
-}   
 }

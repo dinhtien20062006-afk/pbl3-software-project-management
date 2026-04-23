@@ -1,5 +1,6 @@
 package com.pbl3.service;
 
+import com.pbl3.dto.request.AuditLogRequest;
 import com.pbl3.dto.request.ProjectMemberRequest;
 import com.pbl3.dto.response.ProjectMemberResponse;
 import com.pbl3.entity.NotificationType;
@@ -27,6 +28,13 @@ public class ProjectMemberService {
     private final UserRepository userRepository;
     private final ProjectMemberRepository projectMemberRepository;
     private final NotificationRepository notificationRepository;
+    private final AuditLogService auditLogService;
+
+    private User getCurrentUser() {
+        return userRepository.findByUsername(
+                SecurityContextHolder.getContext().getAuthentication().getName()
+        ).orElseThrow(() -> new RuntimeException("Không tìm thấy user"));
+    }
 
     // Lấy danh sách member
     public List<ProjectMemberResponse> getMembers(Long projectId) {
@@ -48,6 +56,8 @@ public class ProjectMemberService {
     // Thêm member
     public void addMember(Long projectId, ProjectMemberRequest request) {
 
+        User currentUser = getCurrentUser();
+
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy project"));
 
@@ -67,11 +77,24 @@ public class ProjectMemberService {
 
         projectMemberRepository.save(pm);
 
+        auditLogService.createLog(
+            AuditLogRequest.builder()
+                    .entityType("PROJECT")
+                    .entityId(projectId)
+                    .userId(currentUser.getId()) 
+                    .actionType("ADD_MEMBER")
+                    .oldValue("N/A")
+                    .newValue(user.getUsername())
+                    .build()
+        );
+
         System.out.println("Thêm thành viên thành công");
     }
 
     // Xóa member
     public void removeMember(Long projectId, Long userId) {
+
+        User currentUser = getCurrentUser();
 
         ProjectMember pm = projectMemberRepository
                 .findByProject_IdAndUser_Id(projectId, userId)
@@ -79,6 +102,17 @@ public class ProjectMemberService {
 
         pm.setLeftAt(LocalDateTime.now());
         projectMemberRepository.save(pm);
+
+        auditLogService.createLog(
+            AuditLogRequest.builder()
+                    .entityType("PROJECT")
+                    .entityId(projectId)
+                    .userId(currentUser.getId())
+                    .actionType("REMOVE_MEMBER")
+                    .oldValue(pm.getUser().getUsername())
+                    .newValue("REMOVED")
+                    .build()
+        );
 
         System.out.println("Member bị xóa khỏi project");
     }
@@ -105,6 +139,17 @@ public class ProjectMemberService {
 
         projectMemberRepository.save(pm);
 
+        auditLogService.createLog(
+            AuditLogRequest.builder()
+                    .entityType("PROJECT")
+                    .entityId(projectId)
+                    .userId(user.getId())
+                    .actionType("LEAVE_PROJECT")
+                    .oldValue(user.getUsername())
+                    .newValue("LEFT_PROJECT")
+                    .build()
+        );
+        
         sendLeaveNotification(pm);
 
         System.out.println("User tự rời project");

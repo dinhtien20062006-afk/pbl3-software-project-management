@@ -4,6 +4,8 @@ import com.pbl3.dto.request.AuditLogRequest;
 import com.pbl3.dto.response.AuditLogResponse;
 import com.pbl3.entity.AuditLog;
 import com.pbl3.entity.User;
+import com.pbl3.exception.AppException;
+import com.pbl3.exception.ErrorCode;
 import com.pbl3.entity.AuditActionType;
 import com.pbl3.repository.AuditLogRepository;
 import com.pbl3.repository.UserRepository;
@@ -84,21 +86,30 @@ public class AuditLogService {
         try {
             return AuditActionType.valueOf(action);
         } catch (Exception e) {
-            throw new RuntimeException("Action không hợp lệ: " + action);
+            throw new AppException(ErrorCode.INVALID_KEY);
         }
     }
 
     // translate sang tiếng Việt
     private String translateAction(String action) {
         switch (action) {
-            case "UPDATE_STATUS": return "Cập nhật trạng thái";
-            case "ASSIGN_TASK": return "Phân công công việc";
-            case "CHANGE_DEADLINE": return "Thay đổi deadline";
             case "CREATE_TASK": return "Tạo công việc";
+            case "UPDATE_TASK": return "Cập nhật công việc";
             case "DELETE_TASK": return "Xóa công việc";
+
+            case "ASSIGN_TASK": return "Phân công công việc";
+            case "REMOVE_ASSIGNMENT": return "Hủy phân công";
+
             case "ADD_COMMENT": return "Thêm bình luận";
+
             case "CREATE_PROJECT": return "Tạo dự án";
+            case "UPDATE_PROJECT": return "Cập nhật dự án";
+            case "DELETE_PROJECT": return "Xóa dự án";
+
             case "ADD_MEMBER": return "Thêm thành viên";
+            case "REMOVE_MEMBER": return "Xóa thành viên";
+            case "LEAVE_PROJECT": return "Rời khỏi dự án";
+
             default: return action;
         }
     }
@@ -108,32 +119,40 @@ public class AuditLogService {
 
         switch (log.getActionType().name()) {
 
-            case "UPDATE_STATUS":
-                return username + " đã đổi trạng thái từ "
-                        + log.getOldValue() + " → " + log.getNewValue();
-
-            case "ASSIGN_TASK":
-                return username + " đã giao công việc cho "
-                        + log.getNewValue();
-
-            case "CHANGE_DEADLINE":
-                return username + " đã thay đổi deadline từ "
-                        + log.getOldValue() + " → " + log.getNewValue();
-
             case "CREATE_TASK":
                 return username + " đã tạo một công việc mới";
+
+            case "UPDATE_TASK":
+               return username + " đã cập nhật công việc";
 
             case "DELETE_TASK":
                 return username + " đã xóa một công việc";
 
+            case "ASSIGN_TASK":
+                return username + " đã giao công việc cho " + log.getNewValue();
+
+            case "REMOVE_ASSIGNMENT":
+                return username + " đã hủy giao công việc từ " + log.getOldValue();
+
             case "ADD_COMMENT":
-                return username + " đã thêm bình luận";
+                return username + " đã thêm một bình luận";
 
             case "CREATE_PROJECT":
                 return username + " đã tạo một dự án";
 
+            case "UPDATE_PROJECT":
+                return username + " đã cập nhật dự án";
+
+            case "DELETE_PROJECT":
+                return username + " đã xóa một dự án";
+
             case "ADD_MEMBER":
-                return username + " đã thêm thành viên vào dự án";
+                return username + " đã thêm " + log.getNewValue() + " vào dự án";
+
+            case "REMOVE_MEMBER":
+                return username + " đã xóa " + log.getOldValue() + " khỏi dự án";
+            case "LEAVE_PROJECT":
+                return username + " đã rời khỏi dự án";
 
             default:
                 return username + " đã thực hiện " + log.getActionType().name();

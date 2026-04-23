@@ -20,7 +20,16 @@ public class TaskService {
     private final TaskRepository taskRepository;
     private final ProjectRepository projectRepository;
     private final CommentRepository commentRepository;
+    private final AuditLogService auditLogService;
     private final NotificationService notificationService;
+    private final UserRepository userRepository;
+
+    private User getCurrentUser() {
+        return userRepository.findByUsername(
+                org.springframework.security.core.context.SecurityContextHolder
+                        .getContext().getAuthentication().getName()
+        ).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+    }
 
     // Lấy danh sách Task của một Project
     public List<ShowTaskResponse> getTasksByProjectId(Long projectId) {
@@ -83,6 +92,8 @@ public class TaskService {
     }
 
     public Task createTask(TaskCreateRequest request) {
+        User user = getCurrentUser();
+
         Project project = projectRepository.findById(request.getProjectId())
                 .orElseThrow(() -> new AppException(ErrorCode.PROJECT_NOT_EXISTED));
 
@@ -95,8 +106,21 @@ public class TaskService {
                     .priority(TaskPriority.valueOf(request.getPriority().toUpperCase()))
                     .status(TaskStatus.valueOf(request.getStatus().toUpperCase()))
                     .build();
+            Task savedTask = taskRepository.save(task);
 
-            return taskRepository.save(task);
+            auditLogService.createLog(
+                    AuditLogRequest.builder()
+                            .entityType("TASK")
+                            .entityId(savedTask.getId())
+                            .userId(user.getId())
+                            .actionType("CREATE_TASK")
+                            .oldValue("N/A")
+                            .newValue(savedTask.getTaskName())
+                            .build()
+            );
+
+        return savedTask;
+
         } catch (IllegalArgumentException e) {
             // Lỗi khi String gửi lên không khớp với Enum Status/Priority
             throw new AppException(ErrorCode.INVALID_KEY);
@@ -104,16 +128,32 @@ public class TaskService {
     }
 
     public void deleteTask(Long taskId) {
+        User user = getCurrentUser();
         if (!taskRepository.existsById(taskId)) {
             throw new AppException(ErrorCode.TASK_NOT_EXISTED);
         }
+        Task task = taskRepository.findById(taskId).get();
+        String oldValue = task.getTaskName();
         taskRepository.deleteById(taskId);
+        auditLogService.createLog(
+                AuditLogRequest.builder()
+                        .entityType("TASK")
+                        .entityId(taskId)
+                        .userId(user.getId())
+                        .actionType("DELETE_TASK")
+                        .oldValue(oldValue)
+                        .newValue("DELETED")
+                        .build()
+            );
     }
 
    public ShowTaskResponse updateTask(Long taskId, TaskUpdateRequest request) {
+    User user = getCurrentUser();
+
     Task task = taskRepository.findById(taskId)
             .orElseThrow(() -> new AppException(ErrorCode.TASK_NOT_EXISTED));
 
+    String oldValue = task.getTaskName();
     // 1. Cập nhật các trường thông thường
     if (request.getTaskName() != null) task.setTaskName(request.getTaskName());
     if (request.getDescription() != null) task.setDescription(request.getDescription());
@@ -136,6 +176,17 @@ public class TaskService {
     Task updatedTask = taskRepository.save(task);
     ShowTaskResponse response = mapToResponse(updatedTask);
 
+    auditLogService.createLog(
+                AuditLogRequest.builder()
+                        .entityType("TASK")
+                        .entityId(task.getId())
+                        .userId(user.getId())
+                        .actionType("UPDATE_TASK")
+                        .oldValue(oldValue)
+                        .newValue(task.getTaskName())
+                        .build()
+        );
+    
     // 4. Gửi thông báo (nếu có assignee)
     if (task.getAssignee() != null) {
         notificationService.sendNotification(
@@ -180,6 +231,9 @@ public class TaskService {
     taskRepository.save(task);
 }
     public void addComment(CommentRequest request) {
+
+        User user = getCurrentUser();
+
         Task task = taskRepository.findById(request.getTaskId())
                 .orElseThrow(() -> new AppException(ErrorCode.TASK_NOT_EXISTED));
 
@@ -193,6 +247,17 @@ public class TaskService {
                 .task(task)
                 .build();
         commentRepository.save(comment);
+
+        auditLogService.createLog(
+                AuditLogRequest.builder()
+                        .entityType("TASK")
+                        .entityId(task.getId())
+                        .userId(user.getId())
+                        .actionType("ADD_COMMENT")
+                        .oldValue("N/A")
+                        .newValue(request.getContent())
+                        .build()
+        );
     }
     @Transactional
     public void updateComment(Long commentId, String newContent) {
