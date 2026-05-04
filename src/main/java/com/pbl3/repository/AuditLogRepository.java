@@ -5,7 +5,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
-import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 
@@ -25,14 +24,4 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
            "ORDER BY a.createdAt DESC")
     List<AuditLog> findAllLogs();
 
-    // Lấy hoạt động mới nhất cho Dashboard (Giới hạn số lượng bằng Pageable)
-    // Admin: Xem toàn bộ
-    @Query("SELECT a FROM AuditLog a ORDER BY a.createdAt DESC")
-    List<AuditLog> findRecentLogs(Pageable pageable);
-
-    // Manager/Member: Chỉ xem log thuộc dự án mình tham gia
-    @Query("SELECT a FROM AuditLog a JOIN ProjectMember pm ON a.project.id = pm.project.id " +
-           "WHERE pm.user.id = :userId AND pm.leftAt IS NULL " +
-           "ORDER BY a.createdAt DESC")
-    List<AuditLog> findRecentLogsByUserProjects(@Param("userId") Long userId, Pageable pageable);
 }
