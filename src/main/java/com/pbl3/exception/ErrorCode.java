@@ -21,6 +21,9 @@ public enum ErrorCode {
     INVALID_DEADLINE(4001, "Deadline không hợp lệ", HttpStatus.BAD_REQUEST),
     ASSIGNMENT_NOT_EXISTED(4002, "Assignment không tồn tại", HttpStatus.NOT_FOUND),
     INVALID_ASSIGNMENT(4003, "Giao việc không hợp lệ", HttpStatus.BAD_REQUEST),
+    TEAM_NOT_EXISTED(2007, "Nhóm không tồn tại", HttpStatus.NOT_FOUND),
+    USER_NOT_IN_TEAM(4004, "Người dùng không phải là thành viên của nhóm này", HttpStatus.BAD_REQUEST),
+    TEAM_NOT_STARTED(4005, "Nhóm chưa bắt đầu", HttpStatus.BAD_REQUEST),
     PROJECT_TIME_INVALID(2001, "Thời hạn của dự án không hợp lệ", HttpStatus.BAD_REQUEST);
 
     private final int code;

@@ -1,4 +1,4 @@
-package com.pbl3.view.admin;
+package com.pbl3.view;
 
 import com.pbl3.dto.response.ShowInfoResponse;
 import com.pbl3.entity.User;
@@ -11,7 +11,6 @@ import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.RolesAllowed;
-import com.pbl3.view.MainLayout;
 
 @Route(value = "admin/users", layout = MainLayout.class)
 @RolesAllowed("ADMIN")

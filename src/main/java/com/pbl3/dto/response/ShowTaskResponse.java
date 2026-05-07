@@ -10,6 +10,7 @@ import com.pbl3.entity.Task;
 @AllArgsConstructor
 public class ShowTaskResponse { 
     private Long id;
+    private String teamName;
     private String taskName;
     private String assigneeUsername;
     private String assigneeFullName;

@@ -263,6 +263,8 @@ public class TaskManagementView extends VerticalLayout implements HasUrlParamete
             case IN_PROGRESS -> "primary";
             case PENDING_APPROVAL -> "warning";
             case DONE -> "success";
+            case CHANGE_REQUESTED -> "error";
+            case EXTENSION_REQUESTED -> "tertiary";
         };
     }
 }

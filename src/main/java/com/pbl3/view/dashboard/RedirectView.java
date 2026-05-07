@@ -1,4 +1,4 @@
-package com.pbl3.view;
+package com.pbl3.view.dashboard;
 
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.router.BeforeEnterEvent;
@@ -6,9 +6,7 @@ import com.vaadin.flow.router.BeforeEnterObserver;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.spring.security.AuthenticationContext;
 import jakarta.annotation.security.PermitAll;
-import com.pbl3.view.admin.AdminDashboardView;
-import com.pbl3.view.manager.ManagerDashboardView;
-import com.pbl3.view.member.MemberDashboardView;
+import com.pbl3.view.MainLayout;
 
 @Route(value = "", layout = MainLayout.class)
 @PermitAll

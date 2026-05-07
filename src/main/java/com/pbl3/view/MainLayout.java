@@ -16,9 +16,7 @@ import com.vaadin.flow.spring.security.AuthenticationContext;
 import com.vaadin.flow.theme.lumo.LumoUtility;
 import org.springframework.security.core.GrantedAuthority;
 
-import com.pbl3.view.admin.*;
-import com.pbl3.view.manager.*;
-import com.pbl3.view.member.*;
+import com.pbl3.view.dashboard.*;
 
 @PageTitle("Hệ thống quản lý dự án PBL3")
 public class MainLayout extends AppLayout {

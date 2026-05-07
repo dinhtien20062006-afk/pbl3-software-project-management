@@ -1,4 +1,4 @@
-package com.pbl3.view.member;
+package com.pbl3.view.dashboard;
 
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.Paragraph;

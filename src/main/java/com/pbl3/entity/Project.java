@@ -29,7 +29,7 @@ public class Project {
 
     private ProjectStatus status; 
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "manager_id") 
     private User manager;
 

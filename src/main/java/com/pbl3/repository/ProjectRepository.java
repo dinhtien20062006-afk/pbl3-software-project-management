@@ -11,7 +11,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     List<Project> findByProjectNameContainingIgnoreCase(String name);
     List<Project> findByManagerId(Long managerId);
 
-    // Đếm số dự án một Manager đang quản lý (Dành cho thẻ Stat)
+    // PM: Đếm số dự án đang quản lý
     long countByManagerId(Long managerId);
 
 }

@@ -32,4 +32,8 @@ public class ProjectMember {
 
     @Column(name = "left_at")
     private LocalDate leftAt;
+
+    @ManyToOne
+    @JoinColumn(name = "team_id")
+    private ProjectTeam projectTeam;
 }

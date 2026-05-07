@@ -27,4 +27,8 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Lo
 
     // Xóa tất cả thành viên của một dự án (dùng khi xóa dự án)
     void deleteByProjectId(Long projectId);
+
+    // Kiểm tra xem user có phải là thành viên của nhóm không
+    boolean existsByTeamIdAndUserId(Long teamId, Long userId);
+
 }

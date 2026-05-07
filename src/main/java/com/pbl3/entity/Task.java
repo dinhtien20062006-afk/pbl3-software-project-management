@@ -56,6 +56,10 @@ public class Task {
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDate createdAt;
 
-    public enum TaskStatus {TODO, IN_PROGRESS, PENDING_APPROVAL, DONE }
+    @ManyToOne
+    @JoinColumn(name = "team_id")
+    private ProjectTeam projectTeam;
+
+    public enum TaskStatus {TODO, IN_PROGRESS, PENDING_APPROVAL, DONE, CHANGE_REQUESTED, EXTENSION_REQUESTED }
     public enum TaskPriority {LOW, MEDIUM, HIGH }
 }

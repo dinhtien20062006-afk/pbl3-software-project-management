@@ -9,12 +9,11 @@ import com.pbl3.entity.Task;
 @NoArgsConstructor
 @AllArgsConstructor
 public class TaskCreateRequest {
-    
+    private Long projectId;
+    private Long teamId; // BỔ SUNG: ID của nhóm
     private String taskName;
     private String description;
-    private Long projectId;
-    private Long assigneeId; // Người được giao task
-    private Task.TaskPriority priority; 
-    private Task.TaskStatus status; 
     private LocalDate deadline;
+    private Task.TaskPriority priority;
+    private Long assigneeId;
 }
