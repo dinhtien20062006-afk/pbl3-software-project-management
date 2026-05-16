@@ -21,7 +21,6 @@ public class AuditLogService {
     private final AuditLogRepository auditLogRepository;
     private final UserRepository userRepository;
     private final ProjectRepository projectRepository;
-    private final ProjectMemberRepository projectMemberRepository;
 
     // --- HELPER: Lấy User hiện tại ---
     private User getCurrentUser() {
@@ -45,19 +44,21 @@ public class AuditLogService {
         auditLogRepository.save(log);
     }
 
-    // --- 2. Lấy Log theo Project (Dành cho Manager & Member) ---
+    // --- 2. Lấy Log theo Project (Dành cho Manager hoăc ADMIN) ---
     public List<AuditLogResponse> getLogsByProject(Long projectId) {
         User currentUser = getCurrentUser();
 
-        // Kiểm tra project tồn tại
-        if (!projectRepository.existsById(projectId)) {
-            throw new AppException(ErrorCode.PROJECT_NOT_EXISTED);
-        }
+        // Lấy thông tin Project để kiểm tra Manager
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new AppException(ErrorCode.PROJECT_NOT_EXISTED));
 
-        // PHÂN QUYỀN: Nếu không phải ADMIN, phải là thành viên dự án mới được xem log dự án đó
+        // PHÂN QUYỀN: 
+        // 1. Nếu là ADMIN -> Cho phép
+        // 2. Nếu không phải ADMIN -> Kiểm tra xem có phải là Manager của dự án này không
         if (currentUser.getRole() != User.Role.ADMIN) {
-            boolean isMember = projectMemberRepository.existsByProjectIdAndUserIdAndLeftAtIsNull(projectId, currentUser.getId());
-            if (!isMember) {
+            boolean isProjectManager = project.getManager().getId().equals(currentUser.getId());
+            
+            if (!isProjectManager) {
                 throw new AppException(ErrorCode.UNAUTHORIZED);
             }
         }
@@ -97,7 +98,7 @@ public class AuditLogService {
             case DELETE_PROJECT -> "Xóa dự án";
             case ADD_MEMBER -> "Thêm thành viên";
             case REMOVE_MEMBER -> "Gỡ thành viên";
-            case LEAVE_PROJECT -> "Rời dự án";
+            case LEAVE_TEAM -> "Rời nhóm";
             case CREATE_TASK -> "Tạo công việc";
             case UPDATE_TASK -> "Sửa công việc";
             case SUBMIT_TASK -> "Nộp công việc";
@@ -105,6 +106,10 @@ public class AuditLogService {
             case START_TASK -> "Bắt đầu công việc";
             case COMPLETE_TASK -> "Hoàn thành công việc";
             case REQUEST_CHANGES -> "Yêu cầu thay đổi";
+            case CREATE_TEAM -> "Tạo nhóm";
+            case UPDATE_TEAM -> "Cập nhật nhóm";
+            case DELETE_TEAM -> "Xóa nhóm";
+            case START_TEAM -> "Bắt đầu nhóm";
             default -> type.name();
         };
     }

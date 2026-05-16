@@ -1,6 +1,6 @@
 package com.pbl3.service;
 
-import com.pbl3.dto.request.TeamCreateRequest;
+import com.pbl3.dto.request.*;
 import com.pbl3.dto.response.TeamResponse;
 import com.pbl3.entity.*;
 import com.pbl3.exception.AppException;
@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
+import java.time.LocalDate;
 
 @Service
 @RequiredArgsConstructor
@@ -21,104 +22,183 @@ public class ProjectTeamService {
     private final ProjectTeamRepository projectTeamRepository;
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
-    private final ProjectMemberRepository projectMemberRepository;
+    private final TeamMemberRepository teamMemberRepository;
     private final AuditLogService auditLogService;
 
-    // Lấy User đang đăng nhập hiện tại
+    // Helper: Lấy User hiện tại
     private User getCurrentUser() {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         return userRepository.findByUsername(username)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
     }
 
-    // Manager tạo nhóm nhỏ cho dự án của mình, đồng thời gán các thành viên đã chọn vào nhóm đó
+    // Tạo Team mới trong một dự án (Chỉ PM của dự án mới được tạo)
     @Transactional
     public TeamResponse createTeam(TeamCreateRequest request) {
         User currentUser = getCurrentUser();
         Project project = projectRepository.findById(request.getProjectId())
                 .orElseThrow(() -> new AppException(ErrorCode.PROJECT_NOT_EXISTED));
 
-        // 1. Chỉ Manager của dự án mới được tạo nhóm nhỏ
-        if (!project.getManager().getId().equals(currentUser.getId())) {
+        // Quyền: Chỉ Project Manager mới được tạo Team trong Project đó
+        if (!isManager(project, currentUser)) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
-        // 2. Kiểm tra Leader có tồn tại không
         User leader = userRepository.findById(request.getLeaderId())
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
-        // 3. Tạo thực thể Team
+        // 1. Lưu thông tin Team
         ProjectTeam team = ProjectTeam.builder()
                 .teamName(request.getTeamName())
-                .description(request.getDescription())
                 .deadline(request.getDeadline())
+                .description(request.getDescription())
                 .project(project)
                 .leader(leader)
+                .status(ProjectTeam.TeamStatus.PLANNING)
                 .build();
 
         ProjectTeam savedTeam = projectTeamRepository.save(team);
 
-        // 4. Gán các thành viên đã chọn vào nhóm này
-        if (request.getMemberIds() != null && !request.getMemberIds().isEmpty()) {
-            List<ProjectMember> members = projectMemberRepository.findAllById(request.getMemberIds());
-            for (ProjectMember member : members) {
-                // Đảm bảo thành viên này thuộc đúng dự án đó
-                if (member.getProject().getId().equals(project.getId())) {
-                    member.setProjectTeam(savedTeam);
-                    // Có thể cập nhật Role thành LEADER cho người trưởng nhóm trong bảng ProjectMember
-                    if (member.getUser().getId().equals(leader.getId())) {
-                        member.setProjectRole("LEADER");
-                    }
-                }
-            }
-            projectMemberRepository.saveAll(members);
-        }
+        // 2. Tự động thêm Leader vào danh sách TeamMember với vai trò LEADER
+        TeamMember leaderMember = TeamMember.builder()
+                .projectTeam(savedTeam)
+                .user(leader)
+                .memberRole("LEADER")
+                .joinedAt(LocalDate.now())
+                .build();
+        teamMemberRepository.save(leaderMember);
 
-        auditLogService.log(project, currentUser, AuditLog.AuditActionType.UPDATE_PROJECT, "Tạo nhóm: " + team.getTeamName());
+        auditLogService.log(project, currentUser, AuditLog.AuditActionType.CREATE_TEAM,  team.getTeamName());
         
         return mapToResponse(savedTeam);
     }
 
-    // Lấy danh sách tất cả nhóm theo dự án dành cho Manager
+    // Lấy danh sách Team của một dự án 
+    @Transactional(readOnly = true)
     public List<TeamResponse> getTeamsByProject(Long projectId) {
         return projectTeamRepository.findByProjectId(projectId).stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
 
-    // Lấy danh sách nhóm mà Leader đang quản lý
-    public List<TeamResponse> getMyManagedTeams() {
+    // Lấy tất cả Team mà User có liên quan (Là PM của dự án chứa Team đó, hoặc là Leader/Member của Team đó)
+    @Transactional(readOnly = true)
+    public List<TeamResponse> getAllTeams() {
         User currentUser = getCurrentUser();
-        return projectTeamRepository.findByLeaderId(currentUser.getId()).stream()
+
+        //Nếu là PROJECT_MANAGER: Thấy nhóm của dự án mình quản lý + nhóm mình tham gia
+        if (currentUser.getRole() == User.Role.PROJECT_MANAGER) {
+            // Lấy tất cả các team mà user này là PM của dự án đó HOẶC là leader/member của team đó
+            return projectTeamRepository.findAll().stream()
+                    .filter(team -> isUserRelatedToTeam(team, currentUser))
+                    .map(this::mapToResponse)
+                    .toList();
+        }
+
+        // Nếu là MEMBER: Chỉ thấy những nhóm mình thực sự tham gia (là Leader hoặc là Thành viên)
+        List<Long> joinedTeamIds = teamMemberRepository.findAllTeamIdsByUserId(currentUser.getId());
+        return projectTeamRepository.findAllById(joinedTeamIds).stream()
                 .map(this::mapToResponse)
-                .collect(Collectors.toList());
+                .toList();
     }
 
-    // Lấy thông tin chi tiết của một nhóm mà mình tham gia
-    public TeamResponse getTeamDetails(Long teamId) {
+    private boolean isUserRelatedToTeam(ProjectTeam team, User user) {
+        // Là Manager của dự án chứa Team này
+        if (team.getProject().getManager().getId().equals(user.getId())) {
+            return true;
+        }
+        
+        // Là Leader của Team này
+        if (team.getLeader().getId().equals(user.getId())) {
+            return true;
+        }
+
+        // Là thành viên trong Team này
+        return teamMemberRepository.existsByProjectTeamIdAndUserId(team.getId(), user.getId());
+    }
+
+    // Cập nhật thông tin Team (Chỉ PM của dự án lớn mới được cập nhật)
+    @Transactional
+    public TeamResponse updateTeam(Long teamId, TeamUpdateRequest request) {
         User currentUser = getCurrentUser();
         ProjectTeam team = projectTeamRepository.findById(teamId)
                 .orElseThrow(() -> new AppException(ErrorCode.TEAM_NOT_EXISTED));
 
-        // Kiểm tra xem user có phải là leader hoặc thành viên của nhóm không
-        boolean isMember = team.getMembers() != null && team.getMembers().stream()
-                .anyMatch(m -> m.getUser().getId().equals(currentUser.getId()));
-        if (!team.getLeader().getId().equals(currentUser.getId()) && !isMember) {
+        // Quyền: Chỉ PM của dự án lớn mới được đổi thông tin Team
+        if (!isManager(team.getProject(), currentUser)) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
-        return mapToResponse(team);
+        team.setTeamName(request.getTeamName());
+        team.setDeadline(request.getDeadline());
+        team.setDescription(request.getDescription());
+
+        // Nếu thay đổi Leader
+        if (!team.getLeader().getId().equals(request.getLeaderId())) {
+            User newLeader = userRepository.findById(request.getLeaderId())
+                    .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+            team.setLeader(newLeader); 
+        }
+
+        ProjectTeam updatedTeam = projectTeamRepository.save(team);
+        auditLogService.log(team.getProject(), currentUser, AuditLog.AuditActionType.UPDATE_TEAM, team.getTeamName());
+
+        return mapToResponse(updatedTeam);
     }
 
-    private TeamResponse mapToResponse(ProjectTeam team) {
+    // Xóa Team (Chỉ PM của dự án mới được xóa)
+    @Transactional
+    public void deleteTeam(Long teamId) {
+        User currentUser = getCurrentUser();
+        ProjectTeam team = projectTeamRepository.findById(teamId)
+                .orElseThrow(() -> new AppException(ErrorCode.TEAM_NOT_EXISTED));
+
+        if (!isManager(team.getProject(), currentUser)) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+        
+        auditLogService.log(team.getProject(), currentUser, AuditLog.AuditActionType.DELETE_TEAM, team.getTeamName());
+
+        projectTeamRepository.delete(team);
+    }
+
+    // Bắt đầu nhóm (PM hoặc Leader mới được bắt đầu nhóm)
+    @Transactional
+    public TeamResponse startTeam(Long teamId) {
+        User currentUser = getCurrentUser();
+        ProjectTeam team = projectTeamRepository.findById(teamId)
+                .orElseThrow(() -> new AppException(ErrorCode.TEAM_NOT_EXISTED));
+
+        // Quyền: Chỉ PM của dự án hoặc Leader của Team mới được bắt đầu nhóm
+        if (!isManager(team.getProject(), currentUser) &&
+            !isLeader(team, currentUser)) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+
+        team.setStatus(ProjectTeam.TeamStatus.IN_PROGRESS);
+        ProjectTeam updatedTeam = projectTeamRepository.save(team);
+        auditLogService.log(team.getProject(), currentUser, AuditLog.AuditActionType.START_TEAM, team.getTeamName());
+
+        return mapToResponse(updatedTeam);
+    }
+
+    //Helper check quyền
+    boolean isManager(Project project, User user) {
+        return project.getManager().getId().equals(user.getId());
+    }
+    boolean isLeader(ProjectTeam team, User user) {
+        return team.getLeader().getId().equals(user.getId());
+    }
+
+    private TeamResponse mapToResponse(ProjectTeam team) {        
         return TeamResponse.builder()
                 .teamId(team.getId())
                 .teamName(team.getTeamName())
                 .description(team.getDescription())
                 .deadline(team.getDeadline())
+                .status(team.getStatus())
                 .leaderName(team.getLeader().getFullName())
-                .memberNames(team.getMembers() != null ? 
-                        team.getMembers().stream().map(m -> m.getUser().getFullName()).toList() : List.of())
+                .managerName(team.getProject().getManager().getFullName())
                 .build();
     }
 }

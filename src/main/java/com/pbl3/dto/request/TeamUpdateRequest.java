@@ -7,8 +7,7 @@ import java.time.LocalDate;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class TeamCreateRequest {
-    private Long projectId;
+public class TeamUpdateRequest {
     private String teamName;
     private String description;
     private LocalDate deadline;

@@ -17,5 +17,6 @@ public class ShowTaskResponse {
     private String description;
     private Task.TaskStatus status;  
     private Task.TaskPriority priority; 
-    private LocalDate deadLine; 
+    private LocalDate deadLine;
+    private String requestReason;
 }

@@ -28,6 +28,7 @@ public class UserService {
         User user = findByUsername(username);
 
         return ShowInfoResponse.builder()
+                .userId(user.getId())
                 .username(user.getUsername())
                 .fullName(user.getFullName())
                 .description(user.getDescription())
@@ -61,6 +62,7 @@ public class UserService {
         List<User> users = userRepository.findAll();
         return users.stream()
                 .map(user -> ShowInfoResponse.builder()
+                        .userId(user.getId())
                         .username(user.getUsername())
                         .fullName(user.getFullName())
                         .role(user.getRole().name())
@@ -96,4 +98,5 @@ public class UserService {
                     .build())
             .toList();
     }
+
 }

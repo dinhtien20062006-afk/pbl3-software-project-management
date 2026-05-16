@@ -1,5 +1,7 @@
 package com.pbl3.view;
 
+import java.time.format.DateTimeFormatter;
+
 import com.pbl3.dto.request.CreateProjectRequest;
 import com.pbl3.dto.request.UpdateProjectRequest;
 import com.pbl3.dto.response.ProjectResponse;
@@ -12,6 +14,7 @@ import com.vaadin.flow.component.datepicker.DatePicker;
 import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.html.H2;
+import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.notification.NotificationVariant;
@@ -23,7 +26,7 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.spring.security.AuthenticationContext;
 import jakarta.annotation.security.PermitAll;
-
+import java.time.LocalDate;
 
 @Route(value = "projects", layout = MainLayout.class)
 @PageTitle("Quản lý dự án")
@@ -34,6 +37,7 @@ public class ProjectView extends VerticalLayout {
     private final AuthenticationContext authContext;
     private final Grid<ProjectResponse> grid = new Grid<>(ProjectResponse.class, false);
     private final TextField searchField = new TextField();
+    private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     public ProjectView(ProjectService projectService, AuthenticationContext authContext) {
         this.projectService = projectService;
@@ -50,16 +54,18 @@ public class ProjectView extends VerticalLayout {
 
         searchField.setPlaceholder("Tìm theo tên dự án...");
         searchField.setPrefixComponent(VaadinIcon.SEARCH.create());
+        searchField.setClearButtonVisible(true);
         searchField.addValueChangeListener(e -> refreshGrid());
 
         Button addBtn = new Button("Tạo dự án mới", VaadinIcon.PLUS.create(), e -> openProjectDialog(null));
         addBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
 
-        // Chỉ hiển thị nút "Tạo mới" cho Project Manager
-        boolean isManager = authContext.getAuthenticatedUser(org.springframework.security.core.userdetails.User.class)
-                .map(u -> u.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_PROJECT_MANAGER")))
+        // Chỉ hiển thị nút "Tạo mới" cho PROJECT_MANAGER hoặc ADMIN
+        boolean canCreate = authContext.getAuthenticatedUser(org.springframework.security.core.userdetails.User.class)
+                .map(u -> u.getAuthorities().stream()
+                        .anyMatch(a -> a.getAuthority().equals("ROLE_PROJECT_MANAGER") || a.getAuthority().equals("ROLE_ADMIN")))
                 .orElse(false);
-        addBtn.setVisible(isManager);
+        addBtn.setVisible(canCreate);
 
         HorizontalLayout toolbar = new HorizontalLayout(searchField, addBtn);
         toolbar.setWidthFull();
@@ -69,42 +75,46 @@ public class ProjectView extends VerticalLayout {
     }
 
     private void setupGrid() {
-        grid.addColumn(ProjectResponse::getProjectName).setHeader("Tên dự án").setSortable(true);
-        grid.addColumn(ProjectResponse::getManagerName).setHeader("Người quản lý");
-        grid.addColumn(ProjectResponse::getStatus).setHeader("Trạng thái");
-        grid.addColumn(ProjectResponse::getStartDate).setHeader("Ngày bắt đầu");
-        grid.addColumn(ProjectResponse::getEndDate).setHeader("Hạn chót");
+        grid.addColumn(ProjectResponse::getProjectName).setHeader("Tên dự án").setSortable(true).setResizable(true);
+        grid.addColumn(ProjectResponse::getManagerName).setHeader("Người quản lý").setResizable(true);
+        
+        // Hiển thị Status kèm màu sắc (Badge)
+        grid.addComponentColumn(project -> {
+            Span status = new Span(project.getStatus().toString());
+            status.getElement().getThemeList().add("badge");
+            if (project.getStatus() == Project.ProjectStatus.COMPLETED) status.getElement().getThemeList().add("success");
+            if (project.getStatus() == Project.ProjectStatus.IN_PROGRESS) status.getElement().getThemeList().add("contrast");
+            return status;
+        }).setHeader("Trạng thái");
 
-        // Cột hành động (Sửa/Xóa)
+        grid.addColumn(project -> project.getStartDate() != null ? project.getStartDate().format(dateFormatter) : "-").setHeader("Ngày bắt đầu");
+        grid.addColumn(project -> project.getEndDate() != null ? project.getEndDate().format(dateFormatter) : "-").setHeader("Hạn chót");
+
         grid.addComponentColumn(project -> {
             HorizontalLayout actions = new HorizontalLayout();
 
-            // 1. Nút Chi tiết (Mọi người đều có thể nhấn để xem)
+            // 1. Chi tiết: Chuyển hướng sang trang Team/Task
             Button detailBtn = new Button(VaadinIcon.SEARCH.create(), e -> {
-                // Điều hướng sang trang chi tiết với ID dự án
-                getUI().ifPresent(ui -> ui.navigate(ProjectDetailView.class, project.getId()));
+                getUI().ifPresent(ui -> ui.navigate(TeamView.class, project.getId()));
             });
             detailBtn.addThemeVariants(ButtonVariant.LUMO_CONTRAST, ButtonVariant.LUMO_SMALL);
             detailBtn.setTooltipText("Xem chi tiết dự án");
 
+            // 2. Sửa & Xóa: Chỉ hiện nếu là Manager dự án hoặc ADMIN
+            boolean hasPermission = isOwnerOrAdmin(project);
+
             Button editBtn = new Button(VaadinIcon.EDIT.create(), e -> openProjectDialog(project));
             editBtn.addThemeVariants(ButtonVariant.LUMO_TERTIARY);
-            editBtn.setVisible(isOwner(project));
+            editBtn.setVisible(hasPermission);
 
             Button deleteBtn = new Button(VaadinIcon.TRASH.create(), e -> {
-                try {
-                    projectService.deleteProject(project.getId());
-                    refreshGrid();
-                    Notification.show("Đã xóa dự án");
-                } catch (Exception ex) {
-                    Notification.show(ex.getMessage(), 3000, Notification.Position.MIDDLE).addThemeVariants(NotificationVariant.LUMO_ERROR);
-                }
+                // Thêm xác nhận trước khi xóa
+                confirmAndDelete(project);
             });
             deleteBtn.addThemeVariants(ButtonVariant.LUMO_TERTIARY, ButtonVariant.LUMO_ERROR);
-            deleteBtn.setVisible(isOwner(project));
+            deleteBtn.setVisible(hasPermission);
 
             actions.add(detailBtn, editBtn, deleteBtn);
-            
             return actions;
         }).setHeader("Thao tác").setAutoWidth(true);
 
@@ -114,44 +124,62 @@ public class ProjectView extends VerticalLayout {
 
     private void refreshGrid() {
         String filter = searchField.getValue();
-        if (filter == null || filter.isEmpty()) {
-            grid.setItems(projectService.getAllProjects());
-        } else {
-            grid.setItems(projectService.searchProjectByName(filter));
+        try {
+            if (filter == null || filter.isEmpty()) {
+                grid.setItems(projectService.getAllProjects());
+            } else {
+                grid.setItems(projectService.getProjectsByName(filter));
+            }
+        } catch (Exception ex) {
+            Notification.show("Lỗi khi tải dữ liệu: " + ex.getMessage(), 3000, Notification.Position.BOTTOM_START)
+                        .addThemeVariants(NotificationVariant.LUMO_ERROR);
         }
     }
 
-    private boolean isOwner(ProjectResponse project) {
-        // Lưu ý: ProjectResponse của bạn cần trả về Username của Manager để so sánh chính xác hơn FullName
-        // Ở đây tạm dùng logic nếu role là MANAGER thì cho hiện (Service sẽ check quyền lần 2 khi gọi hàm)
+    private boolean isOwnerOrAdmin(ProjectResponse project) {
         return authContext.getAuthenticatedUser(org.springframework.security.core.userdetails.User.class)
-                .map(u -> u.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_PROJECT_MANAGER")))
-                .orElse(false);
+                .map(u -> {
+                    boolean isAdmin = u.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+                    // Logic khớp với ProjectService: Manager của project hoặc Admin
+                    return isAdmin || u.getUsername().equals(project.getManagerUsername());
+                }).orElse(false);
     }
 
-    // --- Dialog Thêm/Sửa dự án ---
     private void openProjectDialog(ProjectResponse project) {
+        boolean isEdit = (project != null);
         Dialog dialog = new Dialog();
-        dialog.setHeaderTitle(project == null ? "Tạo dự án mới" : "Cập nhật dự án");
+        dialog.setHeaderTitle(isEdit ? "Cập nhật dự án" : "Tạo dự án mới");
 
         TextField nameField = new TextField("Tên dự án");
+        nameField.setRequired(true);
+        nameField.setWidthFull();
+
         TextArea descField = new TextArea("Mô tả");
+        descField.setWidthFull();
+
         DatePicker startPicker = new DatePicker("Ngày bắt đầu");
         DatePicker endPicker = new DatePicker("Ngày kết thúc");
+        startPicker.setI18n(new DatePicker.DatePickerI18n().setDateFormat("dd/MM/yyyy"));
+        endPicker.setI18n(new DatePicker.DatePickerI18n().setDateFormat("dd/MM/yyyy"));
+
+        startPicker.setMin(LocalDate.now());
+        endPicker.setMin(LocalDate.now());
+
         ComboBox<Project.ProjectStatus> statusBox = new ComboBox<>("Trạng thái");
         statusBox.setItems(Project.ProjectStatus.values());
+        statusBox.setVisible(isEdit); // Tạo mới thì mặc định PLANNING, không cần chọn
 
-        if (project != null) {
+        if (isEdit) {
             nameField.setValue(project.getProjectName());
             descField.setValue(project.getDescription() != null ? project.getDescription() : "");
-            startPicker.setValue(project.getStartDate()); 
+            startPicker.setValue(project.getStartDate());
             endPicker.setValue(project.getEndDate());
             statusBox.setValue(project.getStatus());
         }
 
         Button saveBtn = new Button("Lưu", e -> {
             try {
-                if (project == null) {
+                if (!isEdit) {
                     CreateProjectRequest req = new CreateProjectRequest();
                     req.setProjectName(nameField.getValue());
                     req.setDescription(descField.getValue());
@@ -169,16 +197,42 @@ public class ProjectView extends VerticalLayout {
                 }
                 refreshGrid();
                 dialog.close();
-                Notification.show("Thành công!").addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+                Notification.show("Lưu thành công", 2000, Notification.Position.TOP_CENTER)
+                        .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                Notification.show(ex.getMessage()).addThemeVariants(NotificationVariant.LUMO_ERROR);
+                Notification.show(ex.getMessage(), 5000, Notification.Position.MIDDLE)
+                        .addThemeVariants(NotificationVariant.LUMO_ERROR);
             }
         });
         saveBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
 
-        VerticalLayout dialogLayout = new VerticalLayout(nameField, descField, startPicker, endPicker, statusBox);
+        VerticalLayout dialogLayout = new VerticalLayout(nameField, descField, new HorizontalLayout(startPicker, endPicker), statusBox);
+        dialogLayout.setPadding(false);
+        dialogLayout.setSpacing(true);
+        
         dialog.add(dialogLayout);
         dialog.getFooter().add(new Button("Hủy", e -> dialog.close()), saveBtn);
         dialog.open();
+    }
+
+    private void confirmAndDelete(ProjectResponse project) {
+        Dialog confirmDialog = new Dialog();
+        confirmDialog.setHeaderTitle("Xác nhận xóa");
+        confirmDialog.add(new Span("Bạn có chắc chắn muốn xóa dự án '" + project.getProjectName() + "'?"));
+        
+        Button deleteBtn = new Button("Xóa", e -> {
+            try {
+                projectService.deleteProject(project.getId());
+                refreshGrid();
+                confirmDialog.close();
+                Notification.show("Đã xóa dự án");
+            } catch (Exception ex) {
+                Notification.show(ex.getMessage()).addThemeVariants(NotificationVariant.LUMO_ERROR);
+            }
+        });
+        deleteBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY, ButtonVariant.LUMO_ERROR);
+        
+        confirmDialog.getFooter().add(new Button("Hủy", e -> confirmDialog.close()), deleteBtn);
+        confirmDialog.open();
     }
 }

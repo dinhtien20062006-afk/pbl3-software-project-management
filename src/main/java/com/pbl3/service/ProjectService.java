@@ -6,15 +6,12 @@ import com.pbl3.dto.response.ProjectResponse;
 import com.pbl3.entity.*;
 import com.pbl3.exception.AppException;
 import com.pbl3.exception.ErrorCode;
-import com.pbl3.repository.ProjectRepository;
-import com.pbl3.repository.UserRepository;
-import com.pbl3.repository.ProjectMemberRepository;
+import com.pbl3.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.util.List;
 
 @Service
@@ -23,10 +20,10 @@ public class ProjectService {
 
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
-    private final ProjectMemberRepository projectMemberRepository;
+    private final TeamMemberRepository teamMemberRepository;
     private final AuditLogService auditLogService;
 
-    // Lấy user hiện tại đang đăng nhập từ SecurityContext
+    // Lấy user hiện tại đang đăng nhập
     private User getCurrentUser() {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         return userRepository.findByUsername(username)
@@ -37,13 +34,13 @@ public class ProjectService {
     public ProjectResponse createProject(CreateProjectRequest request) {
         User currentUser = getCurrentUser();
 
-        // Chỉ Project Manager mới có quyền tạo dự án 
-        if (!(currentUser.getRole() == User.Role.PROJECT_MANAGER)) {
+        // Chỉ PROJECT_MANAGER hoặc ADMIN mới có quyền tạo dự án
+        if (currentUser.getRole() == User.Role.MEMBER) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
         if (request.getEndDate().isBefore(request.getStartDate())) {
-            throw new AppException(ErrorCode.PROJECT_TIME_INVALID); 
+            throw new AppException(ErrorCode.PROJECT_TIME_INVALID);
         }
 
         Project project = Project.builder()
@@ -52,21 +49,13 @@ public class ProjectService {
                 .startDate(request.getStartDate())
                 .endDate(request.getEndDate())
                 .status(Project.ProjectStatus.PLANNING)
-                .manager(currentUser)
+                .manager(currentUser) // Người tạo là Manager chính
                 .build();
 
         Project savedProject = projectRepository.save(project);
-
-        // Tự động thêm Manager vào bảng ProjectMember
-        ProjectMember managerMember = ProjectMember.builder()
-                .project(savedProject)
-                .user(currentUser)
-                .projectRole("PROJECT_MANAGER") 
-                .joinedAt(LocalDate.now())
-                .build();
         
-        projectMemberRepository.save(managerMember);
         auditLogService.log(savedProject, currentUser, AuditLog.AuditActionType.CREATE_PROJECT, project.getProjectName());
+        
         return mapToResponse(savedProject);
     }
 
@@ -76,8 +65,8 @@ public class ProjectService {
         Project project = projectRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.PROJECT_NOT_EXISTED));
 
-        // Kiểm tra quyền: Chỉ chủ dự án (Manager) mới được sửa
-        if (!project.getManager().getId().equals(currentUser.getId())) {
+        // Kiểm tra quyền: Chỉ Manager của dự án hoặc ADMIN mới được sửa
+        if (!project.getManager().getId().equals(currentUser.getId()) && currentUser.getRole() != User.Role.ADMIN) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
@@ -87,8 +76,7 @@ public class ProjectService {
         if (request.getEndDate() != null) project.setEndDate(request.getEndDate());
         if (request.getStatus() != null) project.setStatus(request.getStatus());
 
-        // Kiểm tra logic ngày tháng sau khi cập nhật 
-        if (request.getEndDate() != null && request.getEndDate().isBefore(request.getStartDate())) {
+        if (project.getEndDate().isBefore(project.getStartDate())) {
             throw new AppException(ErrorCode.PROJECT_TIME_INVALID);
         }
 
@@ -102,16 +90,12 @@ public class ProjectService {
         Project project = projectRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.PROJECT_NOT_EXISTED));
 
-        if (!project.getManager().getId().equals(currentUser.getId())) {
+        if (!project.getManager().getId().equals(currentUser.getId()) && currentUser.getRole() != User.Role.ADMIN) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
-        // Xóa tất cả thành viên của dự án này trước
-        projectMemberRepository.deleteByProjectId(id);
-
         auditLogService.log(project, currentUser, AuditLog.AuditActionType.DELETE_PROJECT, project.getProjectName());
         projectRepository.delete(project);
-    
     }
 
     @Transactional(readOnly = true)
@@ -120,37 +104,12 @@ public class ProjectService {
 
         // Nếu là ADMIN: Thấy tất cả
         if (currentUser.getRole() == User.Role.ADMIN) {
-            return projectRepository.findAll().stream()
-                    .map(this::mapToResponse).toList();
+            return projectRepository.findAll().stream().map(this::mapToResponse).toList();
         }
 
-        // Nếu là User thường: Chỉ thấy các dự án mình là Manager HOẶC là Member
-        // Chúng ta sẽ lấy danh sách ID dự án mà user này tham gia
-        List<Long> joinedProjectIds = projectMemberRepository.findByUserIdAndLeftAtIsNull(currentUser.getId())
-                .stream()
-                .map(pm -> pm.getProject().getId())
-                .toList();
-
-        return projectRepository.findAllById(joinedProjectIds).stream()
-                .map(this::mapToResponse)
-                .toList();
-    }
- 
-    @Transactional(readOnly = true)
-    public List<ProjectResponse> searchProjectByName(String name) {
-        User currentUser = getCurrentUser();
-        
-        // Tìm kiếm dự án theo tên trước
-        List<Project> searchResults = projectRepository.findByProjectNameContainingIgnoreCase(name);
-
-        // Nếu là ADMIN: Trả về hết kết quả tìm được
-        if (currentUser.getRole() == User.Role.ADMIN) {
-            return searchResults.stream().map(this::mapToResponse).toList();
-        }
-
-        // Nếu không: Lọc lại, chỉ giữ những dự án mà user có tham gia
-        return searchResults.stream()
-                .filter(p -> projectMemberRepository.existsByProjectIdAndUserIdAndLeftAtIsNull(p.getId(), currentUser.getId()))
+        // Nếu là User: Thấy dự án mình làm Manager HOẶC dự án có Nhóm mà mình là thành viên
+        return projectRepository.findAll().stream()
+                .filter(p -> isUserInProject(p, currentUser))
                 .map(this::mapToResponse)
                 .toList();
     }
@@ -161,16 +120,29 @@ public class ProjectService {
         Project project = projectRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.PROJECT_NOT_EXISTED));
 
-        // Kiểm tra: Nếu không phải Admin và không phải thành viên thì không được xem
-        boolean isMember = projectMemberRepository.existsByProjectIdAndUserIdAndLeftAtIsNull(id, currentUser.getId());
-        
-        if (currentUser.getRole() != User.Role.ADMIN && !isMember) {
+        if (currentUser.getRole() != User.Role.ADMIN && !isUserInProject(project, currentUser)) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
         return mapToResponse(project);
     }
-    
+
+    // Kiểm tra xem User có liên quan đến dự án (là Manager hoặc thành viên của bất kỳ Team nào trong dự án)
+    private boolean isUserInProject(Project project, User user) {
+    if (project.getManager().getId().equals(user.getId())) return true;
+    return teamMemberRepository.existsByProjectTeam_ProjectIdAndUserId(project.getId(), user.getId());
+    }
+
+    // Tìm dự án theo tên (cho phép tìm kiếm một phần tên)
+    @Transactional(readOnly = true)
+    public List<ProjectResponse> getProjectsByName(String name) {
+        User currentUser = getCurrentUser();
+        return projectRepository.findByProjectNameContainingIgnoreCase(name).stream()
+                .filter(p -> isUserInProject(p, currentUser))
+                .map(this::mapToResponse)
+                .toList();
+    }
+
     private ProjectResponse mapToResponse(Project project) {
         return ProjectResponse.builder()
                 .id(project.getId())

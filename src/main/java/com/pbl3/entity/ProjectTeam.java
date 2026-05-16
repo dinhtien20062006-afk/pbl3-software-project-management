@@ -3,7 +3,6 @@ package com.pbl3.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDate;
-import java.util.List;
 
 @Entity
 @Data
@@ -26,9 +25,6 @@ public class ProjectTeam {
     @ManyToOne
     @JoinColumn(name = "leader_id")
     private User leader; // Trưởng nhóm
-
-    @OneToMany(mappedBy = "projectTeam")
-    private List<ProjectMember> members; // Các thành viên thuộc nhóm này
 
     private TeamStatus status;
 

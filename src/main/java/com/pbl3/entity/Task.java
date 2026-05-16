@@ -38,11 +38,15 @@ public class Task {
     @Enumerated(EnumType.STRING)
     private TaskStatus status;
 
-    private LocalDate startDate;
+    private LocalDate createdAt;
     private LocalDate deadline;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "project_id", nullable = false)
+    @JoinColumn(name = "team_id")
+    private ProjectTeam projectTeam;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "project_id")
     private Project project;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -51,14 +55,9 @@ public class Task {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assignee_id")
-    private User assignee; 
-
-    @Column(name = "created_at", insertable = false, updatable = false)
-    private LocalDate createdAt;
-
-    @ManyToOne
-    @JoinColumn(name = "team_id")
-    private ProjectTeam projectTeam;
+    private User assignee;
+    
+    private String requestReason;
 
     public enum TaskStatus {TODO, IN_PROGRESS, PENDING_APPROVAL, DONE, CHANGE_REQUESTED, EXTENSION_REQUESTED }
     public enum TaskPriority {LOW, MEDIUM, HIGH }

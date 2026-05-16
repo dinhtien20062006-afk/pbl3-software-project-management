@@ -23,8 +23,8 @@ public class TaskService {
     private final TaskRepository taskRepository;
     private final ProjectRepository projectRepository;
     private final ProjectTeamRepository projectTeamRepository; 
+    private final TeamMemberRepository teamMemberRepository;
     private final UserRepository userRepository;
-    private final ProjectMemberRepository projectMemberRepository;
     private final AuditLogService auditLogService;
 
     // --- HELPER QUYỀN HẠN CẬP NHẬT ---
@@ -35,9 +35,7 @@ public class TaskService {
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
     }
 
-    /**
-     * Kiểm tra quyền quản lý: Trả về true nếu là Manager dự án hoặc Leader của Team đó
-     */
+    // Kiểm tra quyền: Manager dự án hoặc Leader của nhóm mới được phép tạo/sửa task
     private void validateManagementPrivilege(Long projectId, Long teamId, User user) {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new AppException(ErrorCode.PROJECT_NOT_EXISTED));
@@ -58,6 +56,14 @@ public class TaskService {
     @Transactional
     public ShowTaskResponse createTask(TaskCreateRequest request) {
         User currentUser = getCurrentUser();
+
+        // BỔ SUNG: Nếu phía UI không truyền projectId nhưng có truyền teamId
+        if (request.getProjectId() == null && request.getTeamId() != null) {
+            ProjectTeam team = projectTeamRepository.findById(request.getTeamId())
+                    .orElseThrow(() -> new AppException(ErrorCode.TEAM_NOT_EXISTED));
+            // Tự động lấy Project ID từ đối tượng Team trong Database
+            request.setProjectId(team.getProject().getId()); 
+        }
         
         // Kiểm tra quyền: Manager dự án HOẶC Leader của Team mới được tạo task
         validateManagementPrivilege(request.getProjectId(), request.getTeamId(), currentUser);
@@ -67,7 +73,7 @@ public class TaskService {
                 projectTeamRepository.findById(request.getTeamId()).orElse(null) : null;
 
         // Kiểm tra deadline task phải nằm trong deadline dự án và deadline team
-        validateTaskDeadline(request.getDeadline(), project, team);
+        validateTaskDeadline(request.getDeadline(), team);
 
         User assignee = null;
         if (request.getAssigneeId() != null) {
@@ -76,7 +82,7 @@ public class TaskService {
             
             // Nếu có teamId, chỉ được giao cho thành viên trong Team đó
             if (team != null) {
-                boolean isMemberOfTeam = projectMemberRepository.existsByTeamIdAndUserId(team.getId(), assignee.getId());
+                boolean isMemberOfTeam = teamMemberRepository.existsByProjectTeamIdAndUserId(team.getId(), assignee.getId());
                 if (!isMemberOfTeam) throw new AppException(ErrorCode.USER_NOT_IN_TEAM);
             }
         }
@@ -115,7 +121,7 @@ public class TaskService {
 
         // Nếu deadline được cập nhật, kiểm tra lại tính hợp lệ
         if (request.getDeadline() != null) {
-            validateTaskDeadline(request.getDeadline(), task.getProject(), task.getProjectTeam());
+            validateTaskDeadline(request.getDeadline(), task.getProjectTeam());
         }
 
         // Thay đổi người thực hiện (Reassign)
@@ -124,7 +130,7 @@ public class TaskService {
                     .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
                 // Nếu task thuộc nhóm, chỉ được giao cho thành viên trong nhóm đó
             if (task.getProjectTeam() != null) {
-                boolean isMemberOfTeam = projectMemberRepository.existsByTeamIdAndUserId(task.getProjectTeam().getId(), newAssignee.getId());
+                boolean isMemberOfTeam = teamMemberRepository.existsByProjectTeamIdAndUserId(task.getProjectTeam().getId(), newAssignee.getId());
                 if (!isMemberOfTeam) throw new AppException(ErrorCode.USER_NOT_IN_TEAM);
             }
             task.setAssignee(newAssignee);
@@ -134,9 +140,7 @@ public class TaskService {
         return mapToResponse(taskRepository.save(task));
     }
 
-    /**
-     * BỔ SUNG: Lấy tất cả task trong một Team (Cho Member xem chéo nhau)
-     */
+    // Lấy danh sách task của một Team (chỉ thành viên của Team hoặc Manager dự án mới được xem)
     @Transactional(readOnly = true)
     public List<ShowTaskResponse> getTeamTasks(Long teamId) {
         User currentUser = getCurrentUser();
@@ -144,7 +148,7 @@ public class TaskService {
                 .orElseThrow(() -> new AppException(ErrorCode.TEAM_NOT_EXISTED));
 
         // Bảo mật: Chỉ thành viên của Team mới được xem
-        boolean isMember = projectMemberRepository.existsByTeamIdAndUserId(teamId, currentUser.getId());
+        boolean isMember = teamMemberRepository.existsByProjectTeamIdAndUserId(teamId, currentUser.getId());
         if (!isMember && !team.getProject().getManager().getId().equals(currentUser.getId())) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
@@ -213,6 +217,7 @@ public class TaskService {
             task.setStatus(Task.TaskStatus.IN_PROGRESS);
             auditLogService.log(task.getProject(), currentUser, AuditLog.AuditActionType.REQUEST_CHANGES, task.getTaskName());
         }
+        task.setRequestReason(null); // Xóa lý do nếu có
         taskRepository.save(task);
     }
 
@@ -225,6 +230,7 @@ public class TaskService {
         if (!task.getAssignee().getId().equals(currentUser.getId())) throw new AppException(ErrorCode.UNAUTHORIZED);
 
         task.setStatus(Task.TaskStatus.CHANGE_REQUESTED);
+        task.setRequestReason(reason);
         taskRepository.save(task);
         
         auditLogService.log(task.getProject(), currentUser, AuditLog.AuditActionType.UPDATE_TASK, "Yêu cầu đổi task: " + reason);
@@ -239,32 +245,13 @@ public class TaskService {
         if (!task.getAssignee().getId().equals(currentUser.getId())) throw new AppException(ErrorCode.UNAUTHORIZED);
 
         task.setStatus(Task.TaskStatus.EXTENSION_REQUESTED);
+        task.setRequestReason(reason);
         taskRepository.save(task);
         
         auditLogService.log(task.getProject(), currentUser, AuditLog.AuditActionType.UPDATE_TASK, "Yêu cầu gia hạn task: " + reason);
     }
 
-    //Lấy danh sách task sắp hết hạn trong nhóm (deadline trong vòng X ngày) - Dành cho Leader và Manager
-    public List<ShowTaskResponse> getUrgentTasksByTeam(Long teamId, Integer daysThreshold) {
-        LocalDate now = LocalDate.now();
-        LocalDate limitDate = now.plusDays(daysThreshold);
-
-        // Bảo mật: Chỉ Leader của Team hoặc Manager dự án mới được xem danh sách này
-        User currentUser = getCurrentUser();
-        ProjectTeam team = projectTeamRepository.findById(teamId)
-                .orElseThrow(() -> new AppException(ErrorCode.TEAM_NOT_EXISTED));
-
-        // Kiểm tra quyền xem của người dùng hiện tại
-        if (!team.getLeader().getId().equals(currentUser.getId()) && !team.getProject().getManager().getId().equals(currentUser.getId())) {
-            throw new AppException(ErrorCode.UNAUTHORIZED);
-        }
-
-        // Gọi repo đã có ORDER BY deadline ASC
-        return taskRepository.findUrgentTasksByTeam(teamId, now, limitDate).stream()
-                .map(this::mapToResponse)
-                .collect(Collectors.toList());
-    }
-
+    @Transactional(readOnly = true)
     public List<ShowTaskResponse> filterTeamTasks(Long teamId, Task.TaskStatus status, 
                                                   Task.TaskPriority priority, Long assigneeId) {
         
@@ -273,14 +260,9 @@ public class TaskService {
                 .collect(Collectors.toList());
     }
 
-    private void validateTaskDeadline(LocalDate taskDeadline, Project project, ProjectTeam team) {
-        if (taskDeadline == null) return;
-        // So với dự án
-        if (project.getEndDate() != null && taskDeadline.isAfter(project.getEndDate())) {
-            throw new AppException(ErrorCode.INVALID_DEADLINE);
-        }
+    private void validateTaskDeadline(LocalDate taskDeadline, ProjectTeam team) {
         // So với nhóm (nếu có)
-        if (team != null && team.getDeadline() != null && taskDeadline.isAfter(team.getDeadline())) {
+        if (team != null && taskDeadline.isAfter(team.getDeadline())) {
             throw new AppException(ErrorCode.INVALID_DEADLINE);
         }
     }
@@ -293,6 +275,7 @@ public class TaskService {
                 .status(task.getStatus())
                 .priority(task.getPriority())
                 .deadLine(task.getDeadline())
+                .requestReason(task.getRequestReason())
                 .assigneeUsername(task.getAssignee() != null ? task.getAssignee().getUsername() : "Chưa phân công")
                 .teamName(task.getProjectTeam() != null ? task.getProjectTeam().getTeamName() : "N/A") // BỔ SUNG
                 .build();

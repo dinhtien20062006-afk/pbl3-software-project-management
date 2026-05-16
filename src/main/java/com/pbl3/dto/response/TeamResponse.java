@@ -1,8 +1,8 @@
 package com.pbl3.dto.response;
 
+import com.pbl3.entity.ProjectTeam;
 import lombok.*;
 import java.time.LocalDate;
-import java.util.List;
 
 @Data
 @Builder
@@ -11,6 +11,8 @@ public class TeamResponse {
     private String teamName;
     private String description;
     private String leaderName;
+    private Long leaderId;
+    private String managerName;    
     private LocalDate deadline;
-    private List<String> memberNames;
+    private ProjectTeam.TeamStatus status;
 }

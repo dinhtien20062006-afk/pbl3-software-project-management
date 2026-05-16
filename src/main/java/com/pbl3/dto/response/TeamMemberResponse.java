@@ -6,7 +6,8 @@ import java.time.LocalDate;
 @Data
 @Builder
 @NoArgsConstructor @AllArgsConstructor
-public class ProjectMemberResponse {
+public class TeamMemberResponse {
+    private Long teamMemberId;
     private Long userId;
     private String fullName;
     private String username;
