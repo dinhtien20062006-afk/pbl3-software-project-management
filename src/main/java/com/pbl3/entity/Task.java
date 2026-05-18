@@ -46,6 +46,6 @@ public class Task {
     
     private String requestReason;
 
-    public enum TaskStatus {TODO, IN_PROGRESS, PENDING_APPROVAL, DONE, CHANGE_REQUESTED, EXTENSION_REQUESTED }
+    public enum TaskStatus {TODO, IN_PROGRESS, PENDING_APPROVAL, DONE, CHANGE_REQUESTED, EXTENSION_REQUESTED, OVERDUE }
     public enum TaskPriority {LOW, MEDIUM, HIGH }
 }

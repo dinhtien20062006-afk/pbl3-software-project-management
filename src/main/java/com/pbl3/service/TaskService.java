@@ -139,6 +139,17 @@ public class TaskService {
         return mapToResponse(taskRepository.save(task));
     }
 
+        private void autoUpdateOverdueTasks(Long teamId) {
+        LocalDateTime now = LocalDateTime.now();
+        List<Task> overdueTasks = taskRepository.findOverdueTasksInTeam(teamId, now);
+        
+        if (!overdueTasks.isEmpty()) {
+            overdueTasks.forEach(task -> {task.setStatus(Task.TaskStatus.OVERDUE);});
+            taskRepository.saveAll(overdueTasks);
+        }
+    }
+    
+
     // Lấy danh sách task của một Team (chỉ thành viên của Team hoặc Manager dự án mới được xem)
     @Transactional(readOnly = true)
     public List<ShowTaskResponse> getTeamTasks(Long teamId) {
@@ -151,6 +162,7 @@ public class TaskService {
         if (!isMember && !team.getProject().getManager().getId().equals(currentUser.getId())) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
+        autoUpdateOverdueTasks(teamId);
 
         return taskRepository.findByProjectTeamId(teamId).stream()
                 .map(this::mapToResponse)
@@ -270,6 +282,7 @@ public class TaskService {
     public List<ShowTaskResponse> filterTeamTasks(Long teamId, Task.TaskStatus status, 
                                                   Task.TaskPriority priority, Long assigneeId) {
         
+        autoUpdateOverdueTasks(teamId);
         return taskRepository.filterTeamTasks(teamId, status, priority, assigneeId).stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());

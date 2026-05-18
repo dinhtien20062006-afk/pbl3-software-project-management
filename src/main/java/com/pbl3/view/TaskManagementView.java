@@ -174,6 +174,7 @@ public class TaskManagementView extends VerticalLayout implements HasUrlParamete
                 case PENDING_APPROVAL -> statusBadge.getElement().getThemeList().add("warning");
                 case DONE -> statusBadge.getElement().getThemeList().add("success");
                 case CHANGE_REQUESTED, EXTENSION_REQUESTED -> statusBadge.getElement().getThemeList().add("error");
+                case OVERDUE -> statusBadge.getElement().getThemeList().add("tertiary");
             }
             return statusBadge;
         }).setHeader("Trạng thái").setSortable(true);

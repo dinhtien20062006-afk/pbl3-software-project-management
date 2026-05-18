@@ -17,16 +17,16 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
 
     long countByStatus(Task.TaskStatus status);
 
-// Đếm task theo trạng thái cho PM (các task thuộc dự án PM quản lý)
-long countByStatusAndProjectIdIn(Task.TaskStatus status, List<Long> projectIds);
+    // Đếm task theo trạng thái cho PM (các task thuộc dự án PM quản lý)
+    long countByStatusAndProjectIdIn(Task.TaskStatus status, List<Long> projectIds);
 
-// Đếm task theo trạng thái cho cá nhân Member (được giao)
-long countByStatusAndAssigneeId(Task.TaskStatus status, Long assigneeId);
+    // Đếm task theo trạng thái cho cá nhân Member (được giao)
+    long countByStatusAndAssigneeId(Task.TaskStatus status, Long assigneeId);
 
-// Top 5 task mới cập nhật gần đây để hiển thị bảng tin (Activity Log/Recent Tasks)
-List<Task> findTop5ByOrderByDeadlineAsc();
-List<Task> findTop5ByProjectIdInOrderByDeadlineAsc(List<Long> projectIds);
-List<Task> findTop5ByAssigneeIdOrderByDeadlineAsc(Long assigneeId);
+    // Top 5 task mới cập nhật gần đây để hiển thị bảng tin (Activity Log/Recent Tasks)
+    List<Task> findTop5ByOrderByDeadlineAsc();
+    List<Task> findTop5ByProjectIdInOrderByDeadlineAsc(List<Long> projectIds);
+    List<Task> findTop5ByAssigneeIdOrderByDeadlineAsc(Long assigneeId);
 
     // Lọc task theo trạng thái, độ ưu tiên, người được giao trong nhóm
     @Query("SELECT t FROM Task t WHERE t.projectTeam.id = :teamId " +
@@ -46,8 +46,12 @@ List<Task> findTop5ByAssigneeIdOrderByDeadlineAsc(Long assigneeId);
 
     // Đếm số task quá hạn của 1 thành viên trong 1 nhóm cụ thể (Deadline < Hiện tại và chưa DONE)
     @Query("SELECT COUNT(t) FROM Task t WHERE t.projectTeam.id = :teamId AND t.assignee.id = :userId " +
-        "AND t.deadline < :now AND t.status != 'DONE'")
-    long countOverdueTasksByTeamAndUser(@Param("teamId") Long teamId, @Param("userId") Long userId, @Param("now") LocalDateTime now);
+        "AND t.status = 'OVERDUE'")
+    long countOverdueTasksByTeamAndUser(@Param("teamId") Long teamId, @Param("userId") Long userId);
+
+    @Query("SELECT t FROM Task t WHERE t.projectTeam.id = :teamId " +
+        "AND t.deadline < :now AND t.status NOT IN (DONE,OVERDUE)")
+    List<Task> findOverdueTasksInTeam(@Param("teamId") Long teamId, @Param("now") LocalDateTime now);
 
     // --- TRUY VẤN CHO CẤP ĐỘ DỰ ÁN (PROJECT) ---
     long countByProjectId(Long projectId);
