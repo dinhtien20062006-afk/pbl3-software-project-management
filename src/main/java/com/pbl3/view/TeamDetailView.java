@@ -44,6 +44,7 @@ public class TeamDetailView extends VerticalLayout implements HasUrlParameter<Lo
 
     private Long teamId;
     private String currentUsername;
+    private boolean isManagerOrLeader;
 
     // UI Components
     private final VerticalLayout teamInfoSection = new VerticalLayout();
@@ -52,7 +53,7 @@ public class TeamDetailView extends VerticalLayout implements HasUrlParameter<Lo
     private final Button leaveTeamBtn = new Button("Rời khỏi nhóm", VaadinIcon.SIGN_OUT.create());
     private final Button manageTasksBtn = new Button("Quản lý Task", VaadinIcon.TASKS.create());
     private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-    private boolean isLeader;
+
 
     public TeamDetailView(TeamMemberService teamMemberService, ProjectTeamService projectTeamService,
                           UserService userService, AuthenticationContext authContext) {
@@ -77,20 +78,23 @@ public class TeamDetailView extends VerticalLayout implements HasUrlParameter<Lo
         teamInfoSection.removeAll();
 
         // 1. Lấy thông tin nhóm và danh sách tất cả các nhóm để xác định quyền PM
-        // (Do ProjectTeamService đã có các hàm check quyền nội bộ, ta tận dụng dữ liệu mapping)
         List<TeamResponse> allTeams = projectTeamService.getAllTeams();
         TeamResponse currentTeam = allTeams.stream()
                 .filter(t -> t.getTeamId().equals(teamId))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy dữ liệu nhóm hoặc bạn không có quyền xem"));
 
-        // Xác định quyền: Nếu user sở hữu nhóm này trong danh sách getAllTeams() với tư cách PM/Leader
-        // Hoặc so sánh tên Trưởng nhóm trực tiếp để cấp quyền Leader
         boolean isLeader = currentTeam.getLeaderName() != null && 
                 userService.getAllUsers().stream()
                         .filter(u -> u.getFullName().equals(currentTeam.getLeaderName()))
                         .anyMatch(u -> u.getUsername().equals(currentUsername));
-        this.isLeader = isLeader;
+
+         boolean isManager = currentTeam.getManagerName() != null &&
+                userService.getAllUsers().stream()
+                        .filter(u -> u.getFullName().equals(currentTeam.getManagerName()))
+                        .anyMatch(u -> u.getUsername().equals(currentUsername));
+
+        isManagerOrLeader = isManager || isLeader;
 
         // 2. Kết xuất thông tin chung của nhóm (Bố cục phía trên)
         H3 teamTitle = new H3("Nhóm: " + currentTeam.getTeamName());
@@ -105,7 +109,7 @@ public class TeamDetailView extends VerticalLayout implements HasUrlParameter<Lo
         teamInfoSection.add(teamTitle, leaderInfo, descInfo, deadlineInfo, statusSpan);
 
         // 3. Phân quyền ẩn hiện nút chức năng chính
-        addMemberBtn.setVisible(isLeader);
+        addMemberBtn.setVisible(isManagerOrLeader);
         
         // Nút tự rời nhóm: Chỉ ẩn đối với Leader (Theo logic nghiệp vụ tầng Service)
         leaveTeamBtn.setVisible(!isLeader);
@@ -157,7 +161,7 @@ public class TeamDetailView extends VerticalLayout implements HasUrlParameter<Lo
             removeBtn.setTooltipText("Xóa thành viên khỏi nhóm");
             
             // Chỉ PM/Leader mới thấy nút xóa và không được xóa tài khoản mang vai trò LEADER tại đây
-            removeBtn.setVisible(isLeader && !"LEADER".equalsIgnoreCase(member.getRole()));
+            removeBtn.setVisible(isManagerOrLeader && !"LEADER".equalsIgnoreCase(member.getRole()));
 
             actions.add(removeBtn);
             return actions;

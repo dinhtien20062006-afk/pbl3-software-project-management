@@ -10,7 +10,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -58,7 +58,7 @@ public class ProgressService {
         // 2. Tính toán danh sách tiến độ từng thành viên dưới quyền
         List<TeamMember> members = teamMemberRepository.findByProjectTeamId(teamId);
         List<TeamProgressResponse.MemberProgressItem> memberProgressList = new ArrayList<>();
-        LocalDate now = LocalDate.now();
+        LocalDateTime now = LocalDateTime.now();
 
         for (TeamMember member : members) {
             User user = member.getUser();

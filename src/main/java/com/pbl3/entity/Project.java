@@ -3,7 +3,8 @@ package com.pbl3.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity 
 @Table(name = "projects")
@@ -23,15 +24,24 @@ public class Project {
 
     private String description; 
 
-    private LocalDate startDate; 
+    private LocalDateTime startDate; 
 
-    private LocalDate endDate; 
+    private LocalDateTime endDate; 
 
     private ProjectStatus status; 
 
     @ManyToOne
     @JoinColumn(name = "manager_id") 
     private User manager;
+
+    @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ProjectTeam> teams;
+
+    @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Task> tasks;
+
+    @OneToMany(mappedBy = "project") 
+    private List<AuditLog> auditLogs;
 
     public enum ProjectStatus{PLANNING, IN_PROGRESS, COMPLETED, ON_HOLD}
 }

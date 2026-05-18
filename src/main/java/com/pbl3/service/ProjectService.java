@@ -1,7 +1,6 @@
 package com.pbl3.service;
 
-import com.pbl3.dto.request.CreateProjectRequest;
-import com.pbl3.dto.request.UpdateProjectRequest;
+import com.pbl3.dto.request.ProjectRequest;
 import com.pbl3.dto.response.ProjectResponse;
 import com.pbl3.entity.*;
 import com.pbl3.exception.AppException;
@@ -22,7 +21,7 @@ public class ProjectService {
     private final UserRepository userRepository;
     private final TeamMemberRepository teamMemberRepository;
     private final AuditLogService auditLogService;
-
+    private final AuditLogRepository auditLogRepository;
     // Lấy user hiện tại đang đăng nhập
     private User getCurrentUser() {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -31,7 +30,7 @@ public class ProjectService {
     }
 
     @Transactional
-    public ProjectResponse createProject(CreateProjectRequest request) {
+    public ProjectResponse createProject(ProjectRequest request) {
         User currentUser = getCurrentUser();
 
         // Chỉ PROJECT_MANAGER hoặc ADMIN mới có quyền tạo dự án
@@ -60,7 +59,7 @@ public class ProjectService {
     }
 
     @Transactional
-    public ProjectResponse updateProject(Long id, UpdateProjectRequest request) {
+    public ProjectResponse updateProject(Long id, ProjectRequest request) {
         User currentUser = getCurrentUser();
         Project project = projectRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.PROJECT_NOT_EXISTED));
@@ -90,11 +89,24 @@ public class ProjectService {
         Project project = projectRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.PROJECT_NOT_EXISTED));
 
-        if (!project.getManager().getId().equals(currentUser.getId()) && currentUser.getRole() != User.Role.ADMIN) {
+        // 1. Kiểm tra quyền
+        if (!project.getManager().getId().equals(currentUser.getId()) && 
+            currentUser.getRole() != User.Role.ADMIN) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
-        auditLogService.log(project, currentUser, AuditLog.AuditActionType.DELETE_PROJECT, project.getProjectName());
+        // Gửi project = null để bản ghi log DELETE này không bị xóa theo project
+        auditLogService.log(
+            null, 
+            currentUser, 
+            AuditLog.AuditActionType.DELETE_PROJECT, 
+            project.getProjectName()
+        );
+
+        // 3. Ngắt kết nối các AuditLog hiện tại với Project này
+        auditLogRepository.decoupleLogsFromProject(id);
+
+        // 4. Thực hiện xóa Project
         projectRepository.delete(project);
     }
 

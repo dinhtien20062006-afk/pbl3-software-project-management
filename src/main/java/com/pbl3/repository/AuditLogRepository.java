@@ -2,6 +2,7 @@ package com.pbl3.repository;
 
 import com.pbl3.entity.AuditLog;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -23,5 +24,9 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
            "JOIN FETCH a.user " +
            "ORDER BY a.createdAt DESC")
     List<AuditLog> findAllLogs();
+
+       @Modifying
+       @Query("UPDATE AuditLog a SET a.project = null WHERE a.project.id = :projectId")
+       void decoupleLogsFromProject(Long projectId);
 
 }

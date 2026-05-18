@@ -1,7 +1,7 @@
 package com.pbl3.dto.response;
 
 import lombok.*;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import com.pbl3.entity.Task;
 
 @Data
@@ -17,6 +17,6 @@ public class ShowTaskResponse {
     private String description;
     private Task.TaskStatus status;  
     private Task.TaskPriority priority; 
-    private LocalDate deadLine;
+    private LocalDateTime deadLine;
     private String requestReason;
 }

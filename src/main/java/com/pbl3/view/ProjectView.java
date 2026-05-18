@@ -2,15 +2,14 @@ package com.pbl3.view;
 
 import java.time.format.DateTimeFormatter;
 
-import com.pbl3.dto.request.CreateProjectRequest;
-import com.pbl3.dto.request.UpdateProjectRequest;
+import com.pbl3.dto.request.ProjectRequest;
 import com.pbl3.dto.response.ProjectResponse;
 import com.pbl3.entity.Project;
 import com.pbl3.service.ProjectService;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.combobox.ComboBox;
-import com.vaadin.flow.component.datepicker.DatePicker;
+import com.vaadin.flow.component.datetimepicker.DateTimePicker;
 import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.html.H2;
@@ -25,8 +24,11 @@ import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.spring.security.AuthenticationContext;
+import com.vaadin.flow.data.binder.Binder;
+
 import jakarta.annotation.security.PermitAll;
-import java.time.LocalDate;
+
+import java.time.LocalDateTime;
 
 @Route(value = "projects", layout = MainLayout.class)
 @PageTitle("Quản lý dự án")
@@ -37,7 +39,7 @@ public class ProjectView extends VerticalLayout {
     private final AuthenticationContext authContext;
     private final Grid<ProjectResponse> grid = new Grid<>(ProjectResponse.class, false);
     private final TextField searchField = new TextField();
-    private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("HH:mm - dd/MM/yyyy");
 
     public ProjectView(ProjectService projectService, AuthenticationContext authContext) {
         this.projectService = projectService;
@@ -145,73 +147,104 @@ public class ProjectView extends VerticalLayout {
                 }).orElse(false);
     }
 
-    private void openProjectDialog(ProjectResponse project) {
+        private void openProjectDialog(ProjectResponse project) {
         boolean isEdit = (project != null);
         Dialog dialog = new Dialog();
         dialog.setHeaderTitle(isEdit ? "Cập nhật dự án" : "Tạo dự án mới");
 
+        // --- Khởi tạo các Fields ---
         TextField nameField = new TextField("Tên dự án");
-        nameField.setRequired(true);
-        nameField.setWidthFull();
-
         TextArea descField = new TextArea("Mô tả");
-        descField.setWidthFull();
-
-        DatePicker startPicker = new DatePicker("Ngày bắt đầu");
-        DatePicker endPicker = new DatePicker("Ngày kết thúc");
-        startPicker.setI18n(new DatePicker.DatePickerI18n().setDateFormat("dd/MM/yyyy"));
-        endPicker.setI18n(new DatePicker.DatePickerI18n().setDateFormat("dd/MM/yyyy"));
-
-        startPicker.setMin(LocalDate.now());
-        endPicker.setMin(LocalDate.now());
-
+        DateTimePicker startPicker = new DateTimePicker("Ngày bắt đầu");
+        DateTimePicker endPicker = new DateTimePicker("Ngày kết thúc");
         ComboBox<Project.ProjectStatus> statusBox = new ComboBox<>("Trạng thái");
         statusBox.setItems(Project.ProjectStatus.values());
-        statusBox.setVisible(isEdit); // Tạo mới thì mặc định PLANNING, không cần chọn
+        statusBox.setVisible(isEdit);
 
+        startPicker.setMin(LocalDateTime.now());
+        endPicker.setMin(LocalDateTime.now());
+
+        // --- Cấu hình Binder ---
+        // Sử dụng UpdateProjectRequest làm object trung gian để lưu dữ liệu từ form
+        Binder<ProjectRequest> binder = new Binder<>(ProjectRequest.class);
+
+        // Validate Tên dự án
+        binder.forField(nameField)
+            .asRequired("Tên dự án không được để trống")
+            .withValidator(name -> name.length() >= 3, "Tên dự án phải có ít nhất 3 ký tự")
+            .bind(ProjectRequest::getProjectName, ProjectRequest::setProjectName);
+
+        // Validate Mô tả (không bắt buộc nhưng giới hạn độ dài)
+        binder.forField(descField)
+            .withValidator(desc -> desc == null || desc.length() <= 500, "Mô tả không quá 500 ký tự")
+            .bind(ProjectRequest::getDescription, ProjectRequest::setDescription);
+
+        // Validate Ngày bắt đầu
+        binder.forField(startPicker)
+            .asRequired("Phải chọn ngày bắt đầu")
+            .bind(ProjectRequest::getStartDate, ProjectRequest::setStartDate);
+
+        // Validate Ngày kết thúc (Phải sau ngày bắt đầu)
+        binder.forField(endPicker)
+            .asRequired("Phải chọn hạn chót")
+            .withValidator(endDate -> {
+                LocalDateTime startDate = startPicker.getValue();
+                return startDate == null || endDate == null || !endDate.isBefore(startDate);
+            }, "Ngày kết thúc không được trước ngày bắt đầu")
+            .bind(ProjectRequest::getEndDate, ProjectRequest::setEndDate);
+
+        // Bind Status
+        binder.forField(statusBox)
+            .bind(ProjectRequest::getStatus, ProjectRequest::setStatus);
+
+        // --- Khởi tạo dữ liệu cho Binder ---
+        ProjectRequest requestObject = new ProjectRequest();
         if (isEdit) {
-            nameField.setValue(project.getProjectName());
-            descField.setValue(project.getDescription() != null ? project.getDescription() : "");
-            startPicker.setValue(project.getStartDate());
-            endPicker.setValue(project.getEndDate());
-            statusBox.setValue(project.getStatus());
+            // Đổ dữ liệu từ ProjectResponse sang requestObject
+            requestObject.setProjectName(project.getProjectName());
+            requestObject.setDescription(project.getDescription());
+            requestObject.setStartDate(project.getStartDate());
+            requestObject.setEndDate(project.getEndDate());
+            requestObject.setStatus(project.getStatus());
         }
+        binder.readBean(requestObject); // Đưa dữ liệu vào các field trên UI
 
+        // --- Xử lý nút Lưu ---
         Button saveBtn = new Button("Lưu", e -> {
-            try {
-                if (!isEdit) {
-                    CreateProjectRequest req = new CreateProjectRequest();
-                    req.setProjectName(nameField.getValue());
-                    req.setDescription(descField.getValue());
-                    req.setStartDate(startPicker.getValue());
-                    req.setEndDate(endPicker.getValue());
-                    projectService.createProject(req);
-                } else {
-                    UpdateProjectRequest req = new UpdateProjectRequest();
-                    req.setProjectName(nameField.getValue());
-                    req.setDescription(descField.getValue());
-                    req.setStartDate(startPicker.getValue());
-                    req.setEndDate(endPicker.getValue());
-                    req.setStatus(statusBox.getValue());
-                    projectService.updateProject(project.getId(), req);
+            // writeBean sẽ kiểm tra tất cả validators, nếu OK mới nạp dữ liệu vào requestObject
+            if (binder.writeBeanIfValid(requestObject)) {
+                try {
+                    if (!isEdit) {
+                        ProjectRequest createReq = new ProjectRequest();
+                        createReq.setProjectName(requestObject.getProjectName());
+                        createReq.setDescription(requestObject.getDescription());
+                        createReq.setStartDate(requestObject.getStartDate());
+                        createReq.setEndDate(requestObject.getEndDate());
+                        projectService.createProject(createReq);
+                    } else {
+                        projectService.updateProject(project.getId(), requestObject);
+                    }
+                    
+                    refreshGrid();
+                    dialog.close();
+                    Notification.show("Lưu thành công", 2000, Notification.Position.TOP_CENTER)
+                            .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+                } catch (Exception ex) {
+                    Notification.show(ex.getMessage(), 5000, Notification.Position.MIDDLE)
+                            .addThemeVariants(NotificationVariant.LUMO_ERROR);
                 }
-                refreshGrid();
-                dialog.close();
-                Notification.show("Lưu thành công", 2000, Notification.Position.TOP_CENTER)
-                        .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-            } catch (Exception ex) {
-                Notification.show(ex.getMessage(), 5000, Notification.Position.MIDDLE)
+            } else {
+                Notification.show("Vui lòng kiểm tra lại thông tin nhập liệu", 3000, Notification.Position.MIDDLE)
                         .addThemeVariants(NotificationVariant.LUMO_ERROR);
             }
         });
-        saveBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
 
+        saveBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
         VerticalLayout dialogLayout = new VerticalLayout(nameField, descField, new HorizontalLayout(startPicker, endPicker), statusBox);
         dialogLayout.setPadding(false);
         dialogLayout.setSpacing(true);
-        
         dialog.add(dialogLayout);
-        dialog.getFooter().add(new Button("Hủy", e -> dialog.close()), saveBtn);
+        dialog.getFooter().add(new Button("Hủy", ev -> dialog.close()), saveBtn);
         dialog.open();
     }
 

@@ -138,7 +138,7 @@ public class DashboardService {
                 .teamName(task.getProjectTeam() != null ? task.getProjectTeam().getTeamName() : "Dự án chung")
                 .status(task.getStatus().name())
                 .priority(task.getPriority() != null ? task.getPriority().name() : "MEDIUM")
-                .deadline(task.getDeadline() != null ? task.getDeadline().toString() : "Không có")
+                .deadline(task.getDeadline())
                 .build();
     }
 }

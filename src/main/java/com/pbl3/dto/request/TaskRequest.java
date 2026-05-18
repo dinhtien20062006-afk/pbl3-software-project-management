@@ -1,20 +1,20 @@
 package com.pbl3.dto.request;
 
 import lombok.*;
-
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import com.pbl3.entity.Task;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class TaskUpdateRequest {
+public class TaskRequest {
+    private Long projectId;
+    private Long teamId; // BỔ SUNG: ID của nhóm
     private String taskName;
-    private Long assigneeId;
     private String description;
+    private LocalDateTime deadline;
     private Task.TaskPriority priority;
     private Task.TaskStatus status;
-    private LocalDate startDate;
-    private LocalDate deadline;                             
+    private Long assigneeId;
 }

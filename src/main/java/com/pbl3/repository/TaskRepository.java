@@ -6,7 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
@@ -32,8 +32,7 @@ List<Task> findTop5ByAssigneeIdOrderByDeadlineAsc(Long assigneeId);
     @Query("SELECT t FROM Task t WHERE t.projectTeam.id = :teamId " +
            "AND (:status IS NULL OR t.status = :status) " +
            "AND (:priority IS NULL OR t.priority = :priority) " +
-           "AND (:assigneeId IS NULL OR t.assignee.id = :assigneeId) " +
-           "ORDER BY t.createdAt DESC")
+           "AND (:assigneeId IS NULL OR t.assignee.id = :assigneeId) ")
     List<Task> filterTeamTasks(@Param("teamId") Long teamId,
                                @Param("status") Task.TaskStatus status,
                                @Param("priority") Task.TaskPriority priority,
@@ -48,7 +47,7 @@ List<Task> findTop5ByAssigneeIdOrderByDeadlineAsc(Long assigneeId);
     // Đếm số task quá hạn của 1 thành viên trong 1 nhóm cụ thể (Deadline < Hiện tại và chưa DONE)
     @Query("SELECT COUNT(t) FROM Task t WHERE t.projectTeam.id = :teamId AND t.assignee.id = :userId " +
         "AND t.deadline < :now AND t.status != 'DONE'")
-    long countOverdueTasksByTeamAndUser(@Param("teamId") Long teamId, @Param("userId") Long userId, @Param("now") LocalDate now);
+    long countOverdueTasksByTeamAndUser(@Param("teamId") Long teamId, @Param("userId") Long userId, @Param("now") LocalDateTime now);
 
     // --- TRUY VẤN CHO CẤP ĐỘ DỰ ÁN (PROJECT) ---
     long countByProjectId(Long projectId);

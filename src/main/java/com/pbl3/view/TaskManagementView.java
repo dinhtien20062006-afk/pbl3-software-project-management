@@ -1,17 +1,13 @@
 package com.pbl3.view;
 
-import com.pbl3.dto.request.TaskCreateRequest;
-import com.pbl3.dto.request.TaskUpdateRequest;
+import com.pbl3.dto.request.TaskRequest;
 import com.pbl3.dto.response.*;
 import com.pbl3.entity.Task;
-import com.pbl3.service.TaskService;
-import com.pbl3.service.TeamMemberService;
-import com.pbl3.service.ProjectTeamService; // Cần thêm Service để lấy thông tin Team/Project
-import com.pbl3.service.UserService;
+import com.pbl3.service.*;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.combobox.ComboBox;
-import com.vaadin.flow.component.datepicker.DatePicker;
+import com.vaadin.flow.component.datetimepicker.DateTimePicker;
 import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.grid.Grid;
@@ -44,6 +40,7 @@ public class TaskManagementView extends VerticalLayout implements HasUrlParamete
     private final TeamMemberService teamMemberService;
     private final UserService userService;
     private final ProjectTeamService projectTeamService;
+    private final ProjectService projectService; 
     private final AuthenticationContext authContext;
 
     private Long teamId;
@@ -61,13 +58,14 @@ public class TaskManagementView extends VerticalLayout implements HasUrlParamete
     private final ComboBox<Task.TaskPriority> priorityFilter = new ComboBox<>("Mức độ ưu tiên");
     private final ComboBox<TeamMemberResponse> assigneeFilter = new ComboBox<>("Người thực hiện");
 
-    private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("HH:mm - dd/MM/yyyy");
     public TaskManagementView(TaskService taskService, TeamMemberService teamMemberService,
-                              UserService userService, ProjectTeamService projectTeamService, AuthenticationContext authContext) {
+                              UserService userService, ProjectTeamService projectTeamService, ProjectService projectService, AuthenticationContext authContext) {
         this.taskService = taskService;
         this.teamMemberService = teamMemberService;
         this.userService = userService;
         this.projectTeamService = projectTeamService;
+        this.projectService = projectService;
         this.authContext = authContext;
 
         setSizeFull();
@@ -106,7 +104,7 @@ public class TaskManagementView extends VerticalLayout implements HasUrlParamete
 
         isManagerOrLeader = isManager || isLeader;
         createTaskBtn.setVisible(isManagerOrLeader);
-        viewProgressBtn.setVisible(isManager);
+        viewProgressBtn.setVisible(isManagerOrLeader);
 
         refreshGridData();
     }
@@ -129,7 +127,7 @@ public class TaskManagementView extends VerticalLayout implements HasUrlParamete
         title.getStyle().set("margin", "0");
 
         createTaskBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
-        createTaskBtn.addClickListener(e -> openCreateTaskDialog());
+        createTaskBtn.addClickListener(e -> openTaskDialog(null));
 
         backToTeamBtn.addThemeVariants(ButtonVariant.LUMO_TERTIARY);
         backToTeamBtn.addClickListener(e -> getUI().ifPresent(ui -> ui.navigate(TeamDetailView.class, teamId)));
@@ -238,9 +236,35 @@ public class TaskManagementView extends VerticalLayout implements HasUrlParamete
             // 2. Phân hệ nút bấm dành cho Quản lý (Project Manager / Team Leader)
             if (isManagerOrLeader) {
                 // Nút Chỉnh sửa thông tin Task chung
-                Button editBtn = new Button(VaadinIcon.EDIT.create(), e -> openUpdateTaskDialog(task));
+                Button editBtn = new Button(VaadinIcon.EDIT.create(), e -> openTaskDialog(task));
                 editBtn.addThemeVariants(ButtonVariant.LUMO_TERTIARY);
                 actions.add(editBtn);
+
+                Button deleteBtn = new Button(VaadinIcon.TRASH.create(), e -> {
+                    Dialog confirmDialog = new Dialog();
+                    confirmDialog.setHeaderTitle("Xác nhận xóa");
+                    confirmDialog.add(new Span("Bạn có chắc chắn muốn xóa công việc này?"));
+
+                    Button confirmBtn = new Button("Xóa", ev -> {
+                        try {
+                            taskService.deleteTask(task.getId());
+                            Notification.show("Đã xóa công việc").addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+                            refreshGridData();
+                            confirmDialog.close();
+                        } catch (Exception ex) {
+                            Notification.show(ex.getMessage()).addThemeVariants(NotificationVariant.LUMO_ERROR);
+                        }
+                    });
+                    confirmBtn.addThemeVariants(ButtonVariant.LUMO_ERROR);
+
+                    Button cancelBtn = new Button("Hủy", ev -> confirmDialog.close());
+                    cancelBtn.addThemeVariants(ButtonVariant.LUMO_TERTIARY);
+
+                    confirmDialog.getFooter().add(cancelBtn, confirmBtn);
+                    confirmDialog.open();
+                });
+                deleteBtn.addThemeVariants(ButtonVariant.LUMO_TERTIARY, ButtonVariant.LUMO_SMALL);
+                actions.add(deleteBtn);
 
                 // Nếu Task có yêu cầu cần duyệt (Gia hạn, đổi việc)
             if (task.getStatus() == Task.TaskStatus.CHANGE_REQUESTED || 
@@ -251,7 +275,6 @@ public class TaskManagementView extends VerticalLayout implements HasUrlParamete
                     Button viewReasonBtn = new Button(VaadinIcon.EYE.create(), e -> openViewReasonPopup(task.getTaskName(), task.getRequestReason()));
                     viewReasonBtn.addThemeVariants(ButtonVariant.LUMO_TERTIARY, ButtonVariant.LUMO_SMALL);
                     viewReasonBtn.setTooltipText("Xem lý do giải trình");
-                    refreshGridData(); // Cập nhật lại dữ liệu để đảm bảo requestReason mới nhất được hiển thị
                     actions.add(viewReasonBtn);
                 }
             }
@@ -285,42 +308,101 @@ public class TaskManagementView extends VerticalLayout implements HasUrlParamete
 
     // --- DIALOG THAO TÁC NGHIỆP VỤ ---
 
-    private void openCreateTaskDialog() {
+    private void openTaskDialog(ShowTaskResponse taskResponse) {
+        boolean isEdit = (taskResponse != null);
         Dialog dialog = new Dialog();
-        dialog.setHeaderTitle("Tạo công việc mới");
+        dialog.setHeaderTitle(isEdit ? "Cập nhật thông tin công việc" : "Tạo công việc mới");
+        dialog.setWidth("500px");
 
         FormLayout formLayout = new FormLayout();
         TextField nameField = new TextField("Tên công việc");
         TextArea descField = new TextArea("Mô tả chi tiết");
-        DatePicker deadlinePicker = new DatePicker("Hạn chót");
+        DateTimePicker deadlinePicker = new DateTimePicker("Hạn chót"); // Dùng DateTimePicker cho LocalDateTime
         ComboBox<Task.TaskPriority> priorityCombo = new ComboBox<>("Độ ưu tiên", Task.TaskPriority.values());
         ComboBox<TeamMemberResponse> assigneeCombo = new ComboBox<>("Giao cho nhân sự");
+        
+        // Chỉ hiển thị trạng thái khi chỉnh sửa
+        ComboBox<Task.TaskStatus> statusCombo = new ComboBox<>("Trạng thái", Task.TaskStatus.values());
+        statusCombo.setVisible(isEdit);
 
-        assigneeCombo.setItems(teamMemberService.getMembersByTeam(teamId));
+        // Cấu hình Assignee ComboBox
+        List<TeamMemberResponse> members = teamMemberService.getMembersByTeam(teamId);
+        assigneeCombo.setItems(members);
         assigneeCombo.setItemLabelGenerator(TeamMemberResponse::getFullName);
 
-        formLayout.add(nameField, priorityCombo, deadlinePicker, assigneeCombo, descField);
+        // --- LOGIC KIỂM TRA RÀNG BUỘC DEADLINE ---
+        TeamResponse currentTeam = projectTeamService.getAllTeams().stream()
+                .filter(t -> t.getTeamId().equals(teamId)).findFirst().orElse(null);
+        
+        if (currentTeam != null) {
+            ProjectResponse project = projectService.getProjectById(currentTeam.getProjectId());
+            // Deadline Task >= Ngày bắt đầu dự án
+            if (project.getStartDate() != null) {
+                deadlinePicker.setMin(project.getStartDate());
+            }
+            // Deadline Task <= Hạn chót của Nhóm
+            if (currentTeam.getDeadline() != null) {
+                deadlinePicker.setMax(currentTeam.getDeadline());
+            }
+        }
+
+        formLayout.add(nameField, priorityCombo, deadlinePicker, assigneeCombo);
+        if (isEdit) formLayout.add(statusCombo);
+        formLayout.add(descField);
+        formLayout.setColspan(descField, 1);
         formLayout.setResponsiveSteps(new FormLayout.ResponsiveStep("0", 1));
 
-        Binder<TaskCreateRequest> binder = new Binder<>(TaskCreateRequest.class);
-        TaskCreateRequest request = new TaskCreateRequest();
-        request.setTeamId(this.teamId);
+        // --- BINDER LOGIC ---
+        // Sử dụng TaskCreateRequest làm bean tạm để lưu trữ dữ liệu từ form
+        Binder<TaskRequest> binder = new Binder<>(TaskRequest.class);
+        TaskRequest requestBean = new TaskRequest();
+        requestBean.setTeamId(this.teamId);
+
+        binder.forField(nameField).asRequired("Tên không được để trống").bind(TaskRequest::getTaskName, TaskRequest::setTaskName);
+        binder.forField(priorityCombo).asRequired("Chọn độ ưu tiên").bind(TaskRequest::getPriority, TaskRequest::setPriority);
+        binder.forField(deadlinePicker).asRequired("Chọn hạn chót").bind(TaskRequest::getDeadline, TaskRequest::setDeadline);
         
-        binder.forField(nameField).asRequired("Tên công việc không được để trống").bind(TaskCreateRequest::getTaskName, TaskCreateRequest::setTaskName);
-        binder.forField(deadlinePicker).asRequired("Vui lòng chọn hạn chót").bind(TaskCreateRequest::getDeadline, TaskCreateRequest::setDeadline);
-        binder.forField(priorityCombo).asRequired("Chọn mức độ ưu tiên").bind(TaskCreateRequest::getPriority, TaskCreateRequest::setPriority);
         binder.forField(assigneeCombo)
-                .bind(src -> src.getAssigneeId() != null ? teamMemberService.getMembersByTeam(teamId).stream().filter(m -> m.getUserId().equals(src.getAssigneeId())).findFirst().orElse(null) : null,
-                      (dest, val) -> dest.setAssigneeId(val != null ? val.getUserId() : null));
-        binder.bind(descField, TaskCreateRequest::getDescription, TaskCreateRequest::setDescription);
+                .bind(src -> members.stream().filter(m -> m.getUserId().equals(src.getAssigneeId())).findFirst().orElse(null),
+                    (dest, val) -> dest.setAssigneeId(val != null ? val.getUserId() : null));
+        
+        binder.bind(descField, TaskRequest::getDescription, TaskRequest::setDescription);
 
-        binder.readBean(request);
+        // Điền dữ liệu nếu là Edit
+        if (isEdit) {
+            requestBean.setTaskName(taskResponse.getTaskName());
+            requestBean.setDescription(taskResponse.getDescription());
+            requestBean.setDeadline(taskResponse.getDeadLine());
+            requestBean.setPriority(taskResponse.getPriority());
+            
+            members.stream()
+                    .filter(m -> m.getUsername().equals(taskResponse.getAssigneeUsername()))
+                    .findFirst().ifPresent(m -> requestBean.setAssigneeId(m.getUserId()));
+            
+            statusCombo.setValue(taskResponse.getStatus());
+            binder.readBean(requestBean);
+        }
 
-        Button saveBtn = new Button("Tạo mới", e -> {
+        Button saveBtn = new Button(isEdit ? "Cập nhật" : "Tạo mới");
+        saveBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
+        saveBtn.addClickListener(e -> {
             try {
-                if (binder.writeBeanIfValid(request)) {
-                    taskService.createTask(request);
-                    Notification.show("Thêm Task thành công").addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+                if (binder.writeBeanIfValid(requestBean)) {
+                    if (isEdit) {
+                        TaskRequest updateReq = new TaskRequest();
+                        updateReq.setTaskName(requestBean.getTaskName());
+                        updateReq.setDescription(requestBean.getDescription());
+                        updateReq.setDeadline(requestBean.getDeadline());
+                        updateReq.setPriority(requestBean.getPriority());
+                        updateReq.setAssigneeId(requestBean.getAssigneeId());
+                        updateReq.setStatus(statusCombo.getValue());
+                        
+                        taskService.updateTask(taskResponse.getId(), updateReq);
+                        Notification.show("Cập nhật thành công").addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+                    } else {
+                        taskService.createTask(requestBean);
+                        Notification.show("Tạo mới thành công").addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+                    }
                     refreshGridData();
                     dialog.close();
                 }
@@ -328,73 +410,9 @@ public class TaskManagementView extends VerticalLayout implements HasUrlParamete
                 Notification.show("Lỗi: " + ex.getMessage()).addThemeVariants(NotificationVariant.LUMO_ERROR);
             }
         });
-        saveBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
 
         dialog.add(formLayout);
         dialog.getFooter().add(new Button("Hủy", ce -> dialog.close()), saveBtn);
-        dialog.open();
-    }
-
-    private void openUpdateTaskDialog(ShowTaskResponse taskResponse) {
-        Dialog dialog = new Dialog();
-        dialog.setHeaderTitle("Cập nhật thông tin công việc");
-
-        FormLayout formLayout = new FormLayout();
-        TextField nameField = new TextField("Tên công việc");
-        TextArea descField = new TextArea("Mô tả chi tiết");
-        DatePicker deadlinePicker = new DatePicker("Hạn chót");
-        ComboBox<Task.TaskPriority> priorityCombo = new ComboBox<>("Độ ưu tiên", Task.TaskPriority.values());
-        ComboBox<Task.TaskStatus> statusCombo = new ComboBox<>("Trạng thái", Task.TaskStatus.values());
-        ComboBox<TeamMemberResponse> assigneeCombo = new ComboBox<>("Người phụ trách");
-
-        assigneeCombo.setItems(teamMemberService.getMembersByTeam(teamId));
-        assigneeCombo.setItemLabelGenerator(TeamMemberResponse::getFullName);
-
-        formLayout.add(nameField, priorityCombo, statusCombo, deadlinePicker, assigneeCombo, descField);
-
-        Binder<TaskUpdateRequest> binder = new Binder<>(TaskUpdateRequest.class);
-        TaskUpdateRequest request = new TaskUpdateRequest();
-
-        binder.bind(nameField, TaskUpdateRequest::getTaskName, TaskUpdateRequest::setTaskName);
-        binder.bind(descField, TaskUpdateRequest::getDescription, TaskUpdateRequest::setDescription);
-        binder.bind(deadlinePicker, TaskUpdateRequest::getDeadline, TaskUpdateRequest::setDeadline);
-        binder.bind(priorityCombo, TaskUpdateRequest::getPriority, TaskUpdateRequest::setPriority);
-        binder.bind(statusCombo, TaskUpdateRequest::getStatus, TaskUpdateRequest::setStatus);
-        binder.forField(assigneeCombo)
-                .bind(src -> src.getAssigneeId() != null ? teamMemberService.getMembersByTeam(teamId).stream().filter(m -> m.getUserId().equals(src.getAssigneeId())).findFirst().orElse(null) : null,
-                      (dest, val) -> dest.setAssigneeId(val != null ? val.getUserId() : null));
-
-        // Điền dữ liệu cũ hiện tại vào Form
-        request.setTaskName(taskResponse.getTaskName());
-        request.setDescription(taskResponse.getDescription());
-        request.setDeadline(taskResponse.getDeadLine());
-        request.setPriority(taskResponse.getPriority());
-        request.setStatus(taskResponse.getStatus());
-        teamMemberService.getMembersByTeam(teamId).stream()
-                .filter(m -> m.getUsername().equals(taskResponse.getAssigneeUsername()))
-                .findFirst().ifPresent(m -> {
-                    request.setAssigneeId(m.getUserId());
-                    assigneeCombo.setValue(m);
-                });
-
-        binder.readBean(request);
-
-        Button updateBtn = new Button("Cập nhật", e -> {
-            try {
-                if (binder.writeBeanIfValid(request)) {
-                    taskService.updateTask(taskResponse.getId(), request);
-                    Notification.show("Cập nhật Task thành công").addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-                    refreshGridData();
-                    dialog.close();
-                }
-            } catch (Exception ex) {
-                Notification.show("Lỗi: " + ex.getMessage()).addThemeVariants(NotificationVariant.LUMO_ERROR);
-            }
-        });
-        updateBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
-
-        dialog.add(formLayout);
-        dialog.getFooter().add(new Button("Hủy", ce -> dialog.close()), updateBtn);
         dialog.open();
     }
 

@@ -1,7 +1,6 @@
 package com.pbl3.service;
 
-import com.pbl3.dto.request.TaskCreateRequest;
-import com.pbl3.dto.request.TaskUpdateRequest;
+import com.pbl3.dto.request.TaskRequest;
 import com.pbl3.dto.response.ShowTaskResponse;
 import com.pbl3.entity.*;
 import com.pbl3.exception.AppException;
@@ -12,7 +11,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -54,7 +53,7 @@ public class TaskService {
     }
 
     @Transactional
-    public ShowTaskResponse createTask(TaskCreateRequest request) {
+    public ShowTaskResponse createTask(TaskRequest request) {
         User currentUser = getCurrentUser();
 
         // BỔ SUNG: Nếu phía UI không truyền projectId nhưng có truyền teamId
@@ -103,7 +102,7 @@ public class TaskService {
     }
 
     @Transactional
-    public ShowTaskResponse updateTask(Long taskId, TaskUpdateRequest request) {
+    public ShowTaskResponse updateTask(Long taskId, TaskRequest request) {
         User currentUser = getCurrentUser();
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new AppException(ErrorCode.TASK_NOT_EXISTED));
@@ -135,7 +134,7 @@ public class TaskService {
             }
             task.setAssignee(newAssignee);
         }
-        
+        task.setRequestReason(null); // Xóa lý do nếu có
         auditLogService.log(task.getProject(), currentUser, AuditLog.AuditActionType.UPDATE_TASK, task.getTaskName());
         return mapToResponse(taskRepository.save(task));
     }
@@ -156,6 +155,22 @@ public class TaskService {
         return taskRepository.findByProjectTeamId(teamId).stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
+    }
+
+    // Xóa task (chỉ Manager dự án hoặc Leader nhóm mới được xóa)
+    @Transactional
+    public void deleteTask(Long taskId) {
+        User currentUser = getCurrentUser();
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new AppException(ErrorCode.TASK_NOT_EXISTED));
+
+        // Quyền xóa: Manager dự án hoặc Leader của nhóm chứa task đó
+        validateManagementPrivilege(task.getProject().getId(), 
+                task.getProjectTeam() != null ? task.getProjectTeam().getId() : null, 
+                currentUser);
+
+        taskRepository.delete(task);
+        auditLogService.log(task.getProject(), currentUser, AuditLog.AuditActionType.DELETE_TASK, task.getTaskName());
     }
 
     @Transactional
@@ -194,6 +209,7 @@ public class TaskService {
 
         if (task.getStatus() == Task.TaskStatus.IN_PROGRESS) {
             task.setStatus(Task.TaskStatus.PENDING_APPROVAL);
+            task.setRequestReason(null); // Xóa lý do nếu có
             taskRepository.save(task);
             auditLogService.log(task.getProject(), currentUser, AuditLog.AuditActionType.SUBMIT_TASK, task.getTaskName());
         }
@@ -217,7 +233,6 @@ public class TaskService {
             task.setStatus(Task.TaskStatus.IN_PROGRESS);
             auditLogService.log(task.getProject(), currentUser, AuditLog.AuditActionType.REQUEST_CHANGES, task.getTaskName());
         }
-        task.setRequestReason(null); // Xóa lý do nếu có
         taskRepository.save(task);
     }
 
@@ -233,7 +248,7 @@ public class TaskService {
         task.setRequestReason(reason);
         taskRepository.save(task);
         
-        auditLogService.log(task.getProject(), currentUser, AuditLog.AuditActionType.UPDATE_TASK, "Yêu cầu đổi task: " + reason);
+        auditLogService.log(task.getProject(), currentUser, AuditLog.AuditActionType.CHANGE_TASK, task.getTaskName());
     }
 
     // YÊU CẦU GIA HẠN (Member gửi yêu cầu)
@@ -248,7 +263,7 @@ public class TaskService {
         task.setRequestReason(reason);
         taskRepository.save(task);
         
-        auditLogService.log(task.getProject(), currentUser, AuditLog.AuditActionType.UPDATE_TASK, "Yêu cầu gia hạn task: " + reason);
+        auditLogService.log(task.getProject(), currentUser, AuditLog.AuditActionType.EXTEND_DEADLINE, task.getTaskName());
     }
 
     @Transactional(readOnly = true)
@@ -260,7 +275,7 @@ public class TaskService {
                 .collect(Collectors.toList());
     }
 
-    private void validateTaskDeadline(LocalDate taskDeadline, ProjectTeam team) {
+    private void validateTaskDeadline(LocalDateTime taskDeadline, ProjectTeam team) {
         // So với nhóm (nếu có)
         if (team != null && taskDeadline.isAfter(team.getDeadline())) {
             throw new AppException(ErrorCode.INVALID_DEADLINE);

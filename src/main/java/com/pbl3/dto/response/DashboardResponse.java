@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.Setter;
 import java.util.List;
 import java.util.Map;
+import java.time.LocalDateTime;
 
 @Getter
 @Setter
@@ -14,11 +15,6 @@ public class DashboardResponse {
     
     // 1. Thẻ tóm tắt (Cards/Metrics)
     private Map<String, Long> metrics; 
-    /* 
-       ADMIN: {"totalUsers": 50, "totalProjects": 12, "totalTeams": 24, "doneTasks": 120}
-       PM:    {"myProjects": 3, "myTeams": 8, "totalMembers": 15, "pendingApprovalTasks": 5}
-       MEMBER:{"myTodoTasks": 4, "myInProgressTasks": 2, "myDoneTasks": 10, "overdueTasks": 1}
-    */
 
     // 2. Dữ liệu tiến độ để vẽ biểu đồ hình tròn/cột (Chart Data)
     private Map<String, Long> taskStatusOverview; // Thống kê Task theo trạng thái (TODO, IN_PROGRESS, DONE,...)
@@ -36,6 +32,6 @@ public class DashboardResponse {
         private String teamName;
         private String status;
         private String priority;
-        private String deadline;
+        private LocalDateTime deadline;
     }
 }

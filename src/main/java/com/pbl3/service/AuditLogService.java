@@ -104,12 +104,15 @@ public class AuditLogService {
             case SUBMIT_TASK -> "Nộp công việc";
             case REVIEW_TASK -> "Duyệt công việc";
             case START_TASK -> "Bắt đầu công việc";
+            case DELETE_TASK -> "Xóa công việc";
             case COMPLETE_TASK -> "Hoàn thành công việc";
             case REQUEST_CHANGES -> "Yêu cầu thay đổi";
             case CREATE_TEAM -> "Tạo nhóm";
             case UPDATE_TEAM -> "Cập nhật nhóm";
             case DELETE_TEAM -> "Xóa nhóm";
             case START_TEAM -> "Bắt đầu nhóm";
+            case EXTEND_DEADLINE -> "Yêu cầu gia hạn deadline";
+            case CHANGE_TASK-> "Yêu cầu thay đổi task";
             default -> type.name();
         };
     }

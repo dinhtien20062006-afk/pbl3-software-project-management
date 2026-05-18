@@ -13,7 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
@@ -34,7 +34,7 @@ public class ProjectTeamService {
 
     // Tạo Team mới trong một dự án (Chỉ PM của dự án mới được tạo)
     @Transactional
-    public TeamResponse createTeam(TeamCreateRequest request) {
+    public TeamResponse createTeam(TeamRequest request) {
         User currentUser = getCurrentUser();
         Project project = projectRepository.findById(request.getProjectId())
                 .orElseThrow(() -> new AppException(ErrorCode.PROJECT_NOT_EXISTED));
@@ -64,7 +64,7 @@ public class ProjectTeamService {
                 .projectTeam(savedTeam)
                 .user(leader)
                 .memberRole("LEADER")
-                .joinedAt(LocalDate.now())
+                .joinedAt(LocalDateTime.now())
                 .build();
         teamMemberRepository.save(leaderMember);
 
@@ -119,7 +119,7 @@ public class ProjectTeamService {
 
     // Cập nhật thông tin Team (Chỉ PM của dự án lớn mới được cập nhật)
     @Transactional
-    public TeamResponse updateTeam(Long teamId, TeamUpdateRequest request) {
+    public TeamResponse updateTeam(Long teamId, TeamRequest request) {
         User currentUser = getCurrentUser();
         ProjectTeam team = projectTeamRepository.findById(teamId)
                 .orElseThrow(() -> new AppException(ErrorCode.TEAM_NOT_EXISTED));
@@ -192,6 +192,7 @@ public class ProjectTeamService {
 
     private TeamResponse mapToResponse(ProjectTeam team) {        
         return TeamResponse.builder()
+                .projectId(team.getProject().getId())
                 .teamId(team.getId())
                 .teamName(team.getTeamName())
                 .description(team.getDescription())

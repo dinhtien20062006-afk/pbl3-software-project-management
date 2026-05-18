@@ -1,7 +1,8 @@
 package com.pbl3.view;
 
-import com.pbl3.dto.request.TeamCreateRequest;
-import com.pbl3.dto.request.TeamUpdateRequest;
+import java.time.format.DateTimeFormatter;
+
+import com.pbl3.dto.request.TeamRequest;
 import com.pbl3.dto.response.ProjectResponse;
 import com.pbl3.dto.response.ShowInfoResponse;
 import com.pbl3.dto.response.TeamResponse;
@@ -9,17 +10,18 @@ import com.pbl3.entity.ProjectTeam;
 import com.pbl3.service.ProjectService;
 import com.pbl3.service.ProjectTeamService;
 import com.pbl3.service.UserService;
+import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.confirmdialog.ConfirmDialog;
-import com.vaadin.flow.component.datepicker.DatePicker;
 import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.html.H3;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.VaadinIcon;
+import com.vaadin.flow.component.datetimepicker.DateTimePicker;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
@@ -31,9 +33,9 @@ import com.vaadin.flow.router.HasUrlParameter;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.spring.security.AuthenticationContext;
+import com.vaadin.flow.data.binder.Binder;
 import jakarta.annotation.security.PermitAll;
 
-import java.util.List;
 
 @Route(value = "team", layout = MainLayout.class)
 @PageTitle("Chi tiết dự án & Nhóm")
@@ -52,6 +54,9 @@ public class TeamView extends VerticalLayout implements HasUrlParameter<Long> {
     private final VerticalLayout projectInfoSection = new VerticalLayout();
     private final Grid<TeamResponse> teamGrid = new Grid<>(TeamResponse.class, false);
     private final Button addTeamBtn = new Button("Thêm nhóm mới", VaadinIcon.PLUS.create());
+    private final Button ProjectProgressBtn = new Button("Báo cáo tiến độ dự án", VaadinIcon.BAR_CHART_H.create());
+    private final Button HistoryBtn = new Button("Lịch sử hoạt động", VaadinIcon.CLOCK.create());
+    private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("HH:mm - dd/MM/yyyy");
 
     public TeamView(ProjectTeamService teamService, ProjectService projectService, 
                     UserService userService, AuthenticationContext authContext) {
@@ -90,6 +95,18 @@ public class TeamView extends VerticalLayout implements HasUrlParameter<Long> {
         addTeamBtn.setVisible(isProjectManager);
         addTeamBtn.addClickListener(e -> openTeamDialog(null));
 
+        ProjectProgressBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
+        ProjectProgressBtn.addClickListener(e -> {
+            UI.getCurrent().navigate(ProjectProgressView.class, projectId);
+        });
+        ProjectProgressBtn.setVisible(isProjectManager);
+
+        HistoryBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
+        HistoryBtn.addClickListener(e -> {
+            UI.getCurrent().navigate(AuditLogView.class, projectId);
+        });
+        HistoryBtn.setVisible(isProjectManager);
+
         teamGrid.setItems(teamService.getTeamsByProject(projectId));
     }
 
@@ -104,7 +121,7 @@ public class TeamView extends VerticalLayout implements HasUrlParameter<Long> {
         teamGrid.addColumn(TeamResponse::getTeamName).setHeader("Tên nhóm").setSortable(true);
         teamGrid.addColumn(TeamResponse::getLeaderName).setHeader("Trưởng nhóm");
         teamGrid.addColumn(TeamResponse::getStatus).setHeader("Trạng thái");
-        teamGrid.addColumn(TeamResponse::getDeadline).setHeader("Hạn chót");
+        teamGrid.addColumn(team -> team.getDeadline() != null ? team.getDeadline().format(dateFormatter) : "-").setHeader("Hạn chót");
 
         teamGrid.addComponentColumn(team -> {
             HorizontalLayout actions = new HorizontalLayout();
@@ -140,7 +157,7 @@ public class TeamView extends VerticalLayout implements HasUrlParameter<Long> {
             return actions;
         }).setHeader("Thao tác").setAutoWidth(true);
 
-        add(new HorizontalLayout(new H3("Danh sách nhóm thực hiện"), addTeamBtn), teamGrid);
+        add(new HorizontalLayout(new H3("Danh sách nhóm thực hiện"), addTeamBtn, ProjectProgressBtn, HistoryBtn), teamGrid);
         teamGrid.setSizeFull();
     }
 
@@ -169,73 +186,94 @@ public class TeamView extends VerticalLayout implements HasUrlParameter<Long> {
         dialog.open();
     }
 
-    private void openTeamDialog(TeamResponse team) {
+        private void openTeamDialog(TeamResponse team) {
+        boolean isEdit = (team != null);
         Dialog dialog = new Dialog();
-        dialog.setHeaderTitle(team == null ? "Tạo nhóm mới" : "Cập nhật nhóm");
+        dialog.setHeaderTitle(isEdit ? "Cập nhật nhóm" : "Tạo nhóm mới");
 
         FormLayout formLayout = new FormLayout();
         TextField nameField = new TextField("Tên nhóm");
         TextArea descField = new TextArea("Mô tả công việc");
-        DatePicker deadlinePicker = new DatePicker("Hạn chót");
-        
-        // Thay đổi ComboBox để nhận ShowInfoResponse
+        DateTimePicker deadlinePicker = new DateTimePicker("Hạn chót");
         ComboBox<ShowInfoResponse> leaderPicker = new ComboBox<>("Chọn trưởng nhóm");
 
-        // Đổ dữ liệu từ UserService vào
+        // Đổ dữ liệu cho ComboBox
         leaderPicker.setItems(userService.getAllUsers());
-
-        // Hiển thị tên đầy đủ của User trên danh sách chọn
         leaderPicker.setItemLabelGenerator(ShowInfoResponse::getFullName);
 
-        if (team != null) {
-            nameField.setValue(team.getTeamName());
-            descField.setValue(team.getDescription() != null ? team.getDescription() : "");
-            deadlinePicker.setValue(team.getDeadline());
+        // Cấu hình DateTimePicker dựa trên thời gian dự án
+        ProjectResponse project = projectService.getProjectById(this.projectId);
+        deadlinePicker.setMin(project.getStartDate());
+        deadlinePicker.setMax(project.getEndDate());
+
+        // --- KHỞI TẠO BINDER ---
+        Binder<TeamRequest> binder = new Binder<>(TeamRequest.class);
+        TeamRequest requestData = new TeamRequest();
+
+        // Ràng buộc Tên nhóm
+        binder.forField(nameField)
+                .asRequired("Tên nhóm không được để trống")
+                .bind(TeamRequest::getTeamName, TeamRequest::setTeamName);
+
+        // Ràng buộc Trưởng nhóm (Chuyển đổi giữa UserID và Object trong ComboBox)
+        binder.forField(leaderPicker)
+                .asRequired("Vui lòng chọn trưởng nhóm")
+                .bind(src -> null, // Getter không dùng trực tiếp từ requestData cho ComboBox này
+                    (target, value) -> target.setLeaderId(value != null ? value.getUserId() : null));
+
+        // Ràng buộc Hạn chót
+        binder.forField(deadlinePicker)
+                .asRequired("Hạn chót là bắt buộc")
+                .bind(TeamRequest::getDeadline, TeamRequest::setDeadline);
+
+        // Ràng buộc Mô tả
+        binder.bind(descField, TeamRequest::getDescription, TeamRequest::setDescription);
+
+        // --- NẠP DỮ LIỆU KHI EDIT ---
+        if (isEdit) {
+            requestData.setTeamName(team.getTeamName());
+            requestData.setDescription(team.getDescription());
+            requestData.setDeadline(team.getDeadline());
             
-            List<ShowInfoResponse> allUsers = userService.getAllUsers();
-            allUsers.stream()
-                .filter(u -> u.getFullName().equals(team.getLeaderName()))
-                .findFirst()
-                .ifPresent(leaderPicker::setValue);
-                }
+            // Tìm và set leader hiện tại vào ComboBox UI
+            userService.getAllUsers().stream()
+                    .filter(u -> u.getFullName().equals(team.getLeaderName()))
+                    .findFirst()
+                    .ifPresent(leaderPicker::setValue);
+            
+            binder.readBean(requestData);
+        }
 
         formLayout.add(nameField, leaderPicker, deadlinePicker, descField);
         formLayout.setResponsiveSteps(new FormLayout.ResponsiveStep("0", 1));
 
         Button saveBtn = new Button("Lưu", e -> {
-            try {
-                ShowInfoResponse selectedLeader = leaderPicker.getValue();
-                if (selectedLeader == null) {
-                    Notification.show("Vui lòng chọn trưởng nhóm").addThemeVariants(NotificationVariant.LUMO_WARNING);
-                    return;
+            // writeBean kiểm tra Validations trước khi lưu
+            if (binder.writeBeanIfValid(requestData)) {
+                try {
+                    if (!isEdit) {
+                        requestData.setProjectId(this.projectId);
+                        teamService.createTeam(requestData);
+                    } else {
+                        TeamRequest updateReq = new TeamRequest();
+                        updateReq.setTeamName(requestData.getTeamName());
+                        updateReq.setDescription(requestData.getDescription());
+                        updateReq.setDeadline(requestData.getDeadline());
+                        updateReq.setLeaderId(requestData.getLeaderId());
+                        teamService.updateTeam(team.getTeamId(), updateReq);
+                    }
+                    refreshUI();
+                    dialog.close();
+                    Notification.show("Thành công").addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+                } catch (Exception ex) {
+                    Notification.show("Lỗi: " + ex.getMessage()).addThemeVariants(NotificationVariant.LUMO_ERROR);
                 }
-                if (team == null) {
-                    TeamCreateRequest req = new TeamCreateRequest();
-                    req.setProjectId(this.projectId);
-                    req.setTeamName(nameField.getValue());
-                    req.setDescription(descField.getValue());
-                    req.setDeadline(deadlinePicker.getValue());
-                    req.setLeaderId(selectedLeader.getUserId());
-                    teamService.createTeam(req);
-                } else {
-                    TeamUpdateRequest req = new TeamUpdateRequest();
-                    req.setTeamName(nameField.getValue());
-                    req.setDescription(descField.getValue());
-                    req.setDeadline(deadlinePicker.getValue());
-                    req.setLeaderId(selectedLeader.getUserId());
-                    teamService.updateTeam(team.getTeamId(), req);
-                }
-                refreshUI();
-                dialog.close();
-                Notification.show("Thành công").addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-            } catch (Exception ex) {
-                Notification.show(ex.getMessage()).addThemeVariants(NotificationVariant.LUMO_ERROR);
             }
         });
-        saveBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
 
+        saveBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
         dialog.add(formLayout);
-        dialog.getFooter().add(new Button("Hủy", e -> dialog.close()), saveBtn);
+        dialog.getFooter().add(new Button("Hủy", ev -> dialog.close()), saveBtn);
         dialog.open();
     }
 }

@@ -1,7 +1,7 @@
 package com.pbl3.dto.response;
 
 import lombok.*;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Data
 @Builder
@@ -12,5 +12,5 @@ public class TeamMemberResponse {
     private String fullName;
     private String username;
     private String role;
-    private LocalDate joinedAt;
+    private LocalDateTime joinedAt;
 }
