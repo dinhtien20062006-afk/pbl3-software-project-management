@@ -1,50 +1,32 @@
 package com.pbl3.entity;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Table;
-import jakarta.persistence.Id;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 
-import jakarta.persistence.Column;
+import jakarta.persistence.*;
 import lombok.*;
 
-@Entity 
-@Table(name = "users") 
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
+@Entity
+@Table(name = "users")
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor
 public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id; // Bắt buộc phải có @Id cho Entity
+    private Long id;
 
     @Column(unique = true, nullable = false)
     private String username;
 
-    @Column(unique = true, nullable = false)
-    private String email;
+    @Column(unique= true, nullable = false)
+    private String password; 
 
-    @Column(nullable = false)
-    private String password;
-    
-    @Column(nullable = false)
-    private Role role; 
-
-    @Column(nullable = true)
     private String fullName;
 
-    @Column(nullable = true)
-    private String bio;
+    private String description;
 
-    @Column(nullable = true)
-    private String Location;
+    private String location;
 
-    @Column(nullable = true)
-    private String avatarUrl;
+    private String phoneNumber;
 
-    @Column(nullable = false)
-    private UserStatus status;
+    @Enumerated(EnumType.STRING)
+    private Role role;
 
+    public enum Role { ADMIN, PROJECT_MANAGER, MEMBER }
 }

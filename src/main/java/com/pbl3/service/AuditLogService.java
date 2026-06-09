@@ -1,14 +1,14 @@
 package com.pbl3.service;
 
-import com.pbl3.dto.request.AuditLogRequest;
 import com.pbl3.dto.response.AuditLogResponse;
-import com.pbl3.entity.AuditLog;
-import com.pbl3.entity.User;
-import com.pbl3.entity.AuditActionType;
-import com.pbl3.repository.AuditLogRepository;
-import com.pbl3.repository.UserRepository;
+import com.pbl3.entity.*;
+import com.pbl3.exception.AppException;
+import com.pbl3.exception.ErrorCode;
+import com.pbl3.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -20,123 +20,103 @@ public class AuditLogService {
 
     private final AuditLogRepository auditLogRepository;
     private final UserRepository userRepository;
+    private final ProjectRepository projectRepository;
 
-    // CREATE LOG (từ request)
-    public AuditLogResponse createLog(AuditLogRequest request) {
+    // --- HELPER: Lấy User hiện tại ---
+    private User getCurrentUser() {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        return userRepository.findByUsername(username)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+    }
 
+    // --- 1. Ghi Log (Dùng cho các Service khác gọi vào) ---
+    @Transactional
+    public void log(Project project, User currentUser, AuditLog.AuditActionType action, String targetName) {
+        
         AuditLog log = AuditLog.builder()
-                .entityType(request.getEntityType())
-                .entityId(request.getEntityId())
-                .userId(request.getUserId())
-                .actionType(parseAction(request.getActionType()))
-                .oldValue(request.getOldValue())
-                .newValue(request.getNewValue())
+                .project(project)
+                .user(currentUser)
+                .actionType(action)
+                .targetName(targetName)
                 .createdAt(LocalDateTime.now())
                 .build();
-
+        
         auditLogRepository.save(log);
-
-        return mapToResponse(log);
     }
 
-    // GET LOG BY TASK
-    public List<AuditLogResponse> getLogsByTask(Long taskId) {
+    // --- 2. Lấy Log theo Project (Dành cho Manager hoăc ADMIN) ---
+    public List<AuditLogResponse> getLogsByProject(Long projectId) {
+        User currentUser = getCurrentUser();
 
-        return auditLogRepository
-                .findByEntityTypeAndEntityIdOrderByCreatedAtDesc("TASK", taskId)
-                .stream()
+        // Lấy thông tin Project để kiểm tra Manager
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new AppException(ErrorCode.PROJECT_NOT_EXISTED));
+
+        // PHÂN QUYỀN: 
+        // 1. Nếu là ADMIN -> Cho phép
+        // 2. Nếu không phải ADMIN -> Kiểm tra xem có phải là Manager của dự án này không
+        if (currentUser.getRole() != User.Role.ADMIN) {
+            boolean isProjectManager = project.getManager().getId().equals(currentUser.getId());
+            
+            if (!isProjectManager) {
+                throw new AppException(ErrorCode.UNAUTHORIZED);
+            }
+        }
+
+        return auditLogRepository.findAllByProjectId(projectId).stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
 
-    // GET LOG BY USER
-    public List<AuditLogResponse> getLogsByUser(Long userId) {
+    // --- 3. Lấy toàn bộ Log hệ thống (Chỉ dành cho ADMIN) ---
+    public List<AuditLogResponse> getAllSystemLogs() {
+        User currentUser = getCurrentUser();
 
-        return auditLogRepository
-                .findByUserIdOrderByCreatedAtDesc(userId)
-                .stream()
+        if (currentUser.getRole() != User.Role.ADMIN) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+
+        return auditLogRepository.findAllLogs().stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
 
-    // ================== PRIVATE ==================
-
-    // mapping
+    // --- MAPPING & DỊCH THUẬT ---
     private AuditLogResponse mapToResponse(AuditLog log) {
-
-        String username = userRepository.findById(log.getUserId())
-                .map(User::getUsername)
-                .orElse("Không rõ");
-
         return AuditLogResponse.builder()
-                .id(log.getId())
-                .action(translateAction(log.getActionType().name()))
-                .description(buildDescription(log, username))
-                .oldValue(log.getOldValue())
-                .newValue(log.getNewValue())
-                .username(username)
-                .createdAt(log.getCreatedAt())
+                .time(log.getCreatedAt())
+                .executor(log.getUser().getUsername())
+                .action(translateAction(log.getActionType()))
+                .target(log.getTargetName())
                 .build();
     }
 
-    // parse enum an toàn
-    private AuditActionType parseAction(String action) {
-        try {
-            return AuditActionType.valueOf(action);
-        } catch (Exception e) {
-            throw new RuntimeException("Action không hợp lệ: " + action);
-        }
+    private String translateAction(AuditLog.AuditActionType type) {
+        return switch (type) {
+            case CREATE_PROJECT -> "Tạo dự án";
+            case UPDATE_PROJECT -> "Cập nhật dự án";
+            case DELETE_PROJECT -> "Xóa dự án";
+            case COMPLETE_PROJECT -> "Hoàn thành dự án";
+            case ADD_MEMBER -> "Thêm thành viên";
+            case REMOVE_MEMBER -> "Gỡ thành viên";
+            case LEAVE_TEAM -> "Rời nhóm";
+            case CREATE_TASK -> "Tạo công việc";
+            case UPDATE_TASK -> "Sửa công việc";
+            case SUBMIT_TASK -> "Nộp công việc";
+            case REVIEW_TASK -> "Duyệt công việc";
+            case START_TASK -> "Bắt đầu công việc";
+            case DELETE_TASK -> "Xóa công việc";
+            case COMPLETE_TASK -> "Hoàn thành công việc";
+            case REQUEST_CHANGES -> "Yêu cầu thay đổi";
+            case CREATE_TEAM -> "Tạo nhóm";
+            case UPDATE_TEAM -> "Cập nhật nhóm";
+            case DELETE_TEAM -> "Xóa nhóm";
+            case START_TEAM -> "Bắt đầu nhóm";
+            case COMPLETE_TEAM -> "Hoàn thành nhóm";
+            case EXTEND_DEADLINE -> "Yêu cầu gia hạn deadline";
+            case CHANGE_TASK-> "Yêu cầu thay đổi task";
+            default -> type.name();
+        };
     }
 
-    // translate sang tiếng Việt
-    private String translateAction(String action) {
-        switch (action) {
-            case "UPDATE_STATUS": return "Cập nhật trạng thái";
-            case "ASSIGN_TASK": return "Phân công công việc";
-            case "CHANGE_DEADLINE": return "Thay đổi deadline";
-            case "CREATE_TASK": return "Tạo công việc";
-            case "DELETE_TASK": return "Xóa công việc";
-            case "ADD_COMMENT": return "Thêm bình luận";
-            case "CREATE_PROJECT": return "Tạo dự án";
-            case "ADD_MEMBER": return "Thêm thành viên";
-            default: return action;
-        }
-    }
-
-    // mô tả tiếng Việt
-    private String buildDescription(AuditLog log, String username) {
-
-        switch (log.getActionType().name()) {
-
-            case "UPDATE_STATUS":
-                return username + " đã đổi trạng thái từ "
-                        + log.getOldValue() + " → " + log.getNewValue();
-
-            case "ASSIGN_TASK":
-                return username + " đã giao công việc cho "
-                        + log.getNewValue();
-
-            case "CHANGE_DEADLINE":
-                return username + " đã thay đổi deadline từ "
-                        + log.getOldValue() + " → " + log.getNewValue();
-
-            case "CREATE_TASK":
-                return username + " đã tạo một công việc mới";
-
-            case "DELETE_TASK":
-                return username + " đã xóa một công việc";
-
-            case "ADD_COMMENT":
-                return username + " đã thêm bình luận";
-
-            case "CREATE_PROJECT":
-                return username + " đã tạo một dự án";
-
-            case "ADD_MEMBER":
-                return username + " đã thêm thành viên vào dự án";
-
-            default:
-                return username + " đã thực hiện " + log.getActionType().name();
-        }
-    }
 }

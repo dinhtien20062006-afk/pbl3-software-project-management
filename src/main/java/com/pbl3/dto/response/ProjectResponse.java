@@ -4,26 +4,20 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 
-import com.pbl3.entity.ProjectStatus;
+import com.pbl3.entity.Project;
 
 @Data
 @AllArgsConstructor
 @Builder
 public class ProjectResponse {
-
-    // Dữ liệu trả về client
-
     private Long id;
-
     private String projectName;
-
     private String description;
-
-    private LocalDate startDate;
-
-    private LocalDate endDate;
-
-    private ProjectStatus status;
+    private LocalDateTime startDate;
+    private LocalDateTime endDate;
+    private Project.ProjectStatus status;
+    private String managerName;
+    private String managerUsername;
 }

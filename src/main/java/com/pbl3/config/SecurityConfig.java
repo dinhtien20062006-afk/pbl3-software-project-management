@@ -1,58 +1,36 @@
 package com.pbl3.config;
 
+import com.vaadin.flow.spring.security.VaadinWebSecurity;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.web.SecurityFilterChain;
+import com.pbl3.view.LoginView; 
 
 @Configuration
 @EnableWebSecurity
-public class SecurityConfig {
+@EnableMethodSecurity
+public class SecurityConfig extends VaadinWebSecurity {
 
-    // Định nghĩa cơ chế mã hóa mật khẩu
     @Bean
-    public PasswordEncoder passwordEncoder() {
+    public BCryptPasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-            // Tắt CSRF để thuận tiện cho việc gọi API từ công cụ test (Postman)
-            .csrf(csrf -> csrf.disable())
-            
-            // Cấu hình phân quyền
-            .authorizeHttpRequests(auth -> auth
-                // Các đường dẫn không cần đăng nhập (Trang chủ, Đăng ký, Đăng nhập, CSS/JS)
-                .requestMatchers("/", "/register", "/login", "/css/**", "/js/**").permitAll()
-                
-                // Chỉ Project Manager mới được tạo hoặc xóa dự án
-                .requestMatchers("/projects/create/**", "/projects/delete/**").hasRole("PROJECT_MANAGER")
-                
-                // Các tính năng liên quan đến Admin hệ thống
-                .requestMatchers("/admin/**").hasRole("ADMIN")
-                
-                // Tất cả các request khác (như Dashboard, Task) yêu cầu phải đăng nhập
-                .anyRequest().authenticated()
-            )
-            
-            // Cấu hình giao diện đăng nhập
-            .formLogin(form -> form
-                .loginPage("/login")               // Đường dẫn trang login do Tiến làm
-                .defaultSuccessUrl("/dashboard")    // Đăng nhập xong thì vào đây
-                .permitAll()
-            )
-            
-            // Cấu hình đăng xuất
-            .logout(logout -> logout
-                .logoutUrl("/logout")
-                .logoutSuccessUrl("/login?logout")
-                .permitAll()
-            );
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        // Cho phép truy cập vào resource của Vaadin và trang đăng ký
+        http.authorizeHttpRequests(auth -> 
+            auth.requestMatchers("/register").permitAll()
+        );
 
-        return http.build();
+        super.configure(http);
+        
+        // Thiết lập trang login mặc định bằng Vaadin View
+        setLoginView(http, LoginView.class);
+
+        http.formLogin(form -> form.defaultSuccessUrl("/", true));
     }
 }

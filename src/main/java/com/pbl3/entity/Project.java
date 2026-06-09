@@ -3,8 +3,7 @@ package com.pbl3.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDate;
-import java.util.ArrayList;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity 
@@ -21,23 +20,28 @@ public class Project {
     private Long id;
 
     @Column(name = "project_name") 
-    // Map với cột project_name trong DB
     private String projectName;
 
     private String description; 
 
-    private LocalDate startDate; 
+    private LocalDateTime startDate; 
 
-    private LocalDate endDate; 
+    private LocalDateTime endDate; 
 
     private ProjectStatus status; 
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "manager_id") // Khớp với tên cột trong file SQL của bạn
+    @ManyToOne
+    @JoinColumn(name = "manager_id") 
     private User manager;
 
-    @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    @Builder.Default
-    private List<Task> tasks = new ArrayList<>();
-    
+    @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ProjectTeam> teams;
+
+    @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Task> tasks;
+
+    @OneToMany(mappedBy = "project") 
+    private List<AuditLog> auditLogs;
+
+    public enum ProjectStatus{PLANNING, IN_PROGRESS, COMPLETED, ON_HOLD}
 }

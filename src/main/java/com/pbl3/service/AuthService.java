@@ -1,69 +1,54 @@
 package com.pbl3.service;
 
-import com.pbl3.dto.request.SignupRequest;
-import com.pbl3.entity.Role;
+import com.pbl3.dto.request.*;
 import com.pbl3.entity.User;
 import com.pbl3.repository.UserRepository;
-
-import org.springframework.security.authentication.DisabledException;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.*;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
-
-import com.pbl3.exception.AppException;
-import com.pbl3.exception.ErrorCode;
+import java.util.Collections;
+import com.pbl3.exception.*;
 
 @Service
-public class AuthService {
+@RequiredArgsConstructor
+public class AuthService implements UserDetailsService {
 
     private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
-    
-    public AuthService(UserRepository userRepository,
-                       PasswordEncoder passwordEncoder) {
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
+    private final BCryptPasswordEncoder passwordEncoder;
+
+    // Load user phục vụ Spring Security đăng nhập qua Form
+    @Override
+    public UserDetails loadUserByUsername(String username)  {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+
+        return new org.springframework.security.core.userdetails.User(
+                user.getUsername(),
+                user.getPassword(),
+                Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()))
+        );
     }
-
-    public User registerUser(SignupRequest request) {
-
-        if (userRepository.existsByUsername(request.getUsername())) {
-        throw new AppException(ErrorCode.USER_EXISTED);
-        }
-
-        if (userRepository.existsByEmail(request.getEmail())) {
+    
+    // Xử lý đăng ký người dùng mới
+    public void registerNewUser(RegisterRequest registerRequest) {
+        if (userRepository.findByUsername(registerRequest.getUsername()).isPresent()) {
             throw new AppException(ErrorCode.USER_EXISTED);
         }
 
         User user = new User();
-
-        user.setUsername(request.getUsername());
-        user.setEmail(request.getEmail());
-        user.setRole(Role.MEMBER); // default role
-
-        // BCrypt hash
-        user.setPassword(
-                passwordEncoder.encode(request.getPassword())
-        );
-
-        return userRepository.save(user);
-    }
-
-    public User SignIn(String username, String password) {
-        User user = userRepository.findByUsername(username)
-                .orElse(null);
-
-        if (user != null && !user.getStatus().canLogin()) {
-        throw new DisabledException("Tài khoản đang bị khóa hoặc không khả dụng. Trạng thái hiện tại: " + user.getStatus());
+        user.setUsername(registerRequest.getUsername());
+        user.setFullName(registerRequest.getFullName());
+        user.setPassword(passwordEncoder.encode(registerRequest.getPassword()));
+        
+        // Logic gán quyền: Nếu là người dùng đầu tiên thì cho làm ADMIN, ngược lại là MEMBER
+        if (userRepository.count() == 0) {
+            user.setRole(User.Role.ADMIN);
+        } else {
+            user.setRole(User.Role.MEMBER);
         }
         
-        User user1 = userRepository.findByEmail(username)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
-
-        User authenticatedUser = user != null ? user : user1;
-
-        if (!passwordEncoder.matches(password, authenticatedUser.getPassword())) {
-            throw new AppException(ErrorCode.UNAUTHENTICATED);
-        }
-        return authenticatedUser;
+        userRepository.save(user);
     }
 }

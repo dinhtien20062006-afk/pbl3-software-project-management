@@ -1,13 +1,12 @@
 package com.pbl3.dto.request;
+
 import lombok.*;
 
-@Getter
-@Setter
+@Getter @Setter 
+@NoArgsConstructor @AllArgsConstructor @Builder
 public class UpdateRequest {
     private String username;
-    private String email;
-    private String bio;
-    private String fullName;
-    private String Location;
-    private String avatarUrl;
+    private String description;
+    private String location;
+    private String phoneNumber;
 }

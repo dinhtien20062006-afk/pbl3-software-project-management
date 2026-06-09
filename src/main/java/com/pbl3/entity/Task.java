@@ -1,19 +1,9 @@
 package com.pbl3.entity;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.Table;
-import jakarta.persistence.Id;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Column;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.EnumType;
-
-
+import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 import java.time.LocalDateTime;
 
@@ -38,26 +28,32 @@ public class Task {
     @Enumerated(EnumType.STRING)
     private TaskStatus status;
 
-    private LocalDateTime startDate;
     private LocalDateTime deadline;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "project_id", nullable = false)
+    @OnDelete(action = OnDeleteAction.CASCADE)
+    @JoinColumn(name = "team_id")
+    private ProjectTeam projectTeam;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @OnDelete(action = OnDeleteAction.CASCADE)
+    @JoinColumn(name = "project_id")
     private Project project;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "created_by")
-    private User creator;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "assignee_id") 
+    @JoinColumn(name = "assignee_id")
     private User assignee;
+    
+    private String requestReason;
 
-    @Column(name = "created_at", insertable = false, updatable = false)
-    private LocalDateTime createdAt;
+    // Member gui deadline mong muon khi yeu cau gia han.
+    private LocalDateTime requestedDeadline;
 
-    @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
-    @Column(name = "completed_at")
-    private LocalDateTime completedAt;
+    // Member gui nguoi thuc hien moi mong muon khi yeu cau doi cong viec.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "requested_assignee_id")
+    private User requestedAssignee;
+
+    public enum TaskStatus {TODO, IN_PROGRESS, PENDING_APPROVAL, DONE, CHANGE_REQUESTED, EXTENSION_REQUESTED, OVERDUE }
+    public enum TaskPriority {LOW, MEDIUM, HIGH }
 }
