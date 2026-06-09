@@ -105,21 +105,6 @@ public class ProjectTeamService {
                 .toList();
     }
 
-    private boolean isUserRelatedToTeam(ProjectTeam team, User user) {
-        // Là Manager của dự án chứa Team này
-        if (team.getProject().getManager().getId().equals(user.getId())) {
-            return true;
-        }
-        
-        // Là Leader của Team này
-        if (team.getLeader().getId().equals(user.getId())) {
-            return true;
-        }
-
-        // Là thành viên trong Team này
-        return teamMemberRepository.existsByProjectTeamIdAndUserId(team.getId(), user.getId());
-    }
-
     // Cập nhật thông tin Team (Chỉ PM của dự án lớn mới được cập nhật)
     @Transactional
     public TeamResponse updateTeam(Long teamId, TeamRequest request) {
